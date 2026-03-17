@@ -3,16 +3,15 @@ session_start();
 	
 	$now = time();
 	if (isset($_SESSION["discard_after"]) && $now > $_SESSION["discard_after"]) {
-		// this session has worn out its welcome; kill it and start a brand new one
+		
 		session_unset();
 		session_destroy();
 		session_start();
 	}
 
-	// either new or old, it should live at most for another hour
+	
 	$_SESSION["discard_after"] = $now + 3600;
-	//$_SESSION["discard_after"] = $now + 30;
-
+	
 	function message() {
 		if (isset($_SESSION["message"])) {
 			
@@ -22,7 +21,7 @@ session_start();
 			$output .= "</div>";
 			$output .= "</div>";
 			
-			// clear message after use
+			
 			$_SESSION["message"] = null;
 			
 			return $output;
@@ -36,7 +35,7 @@ session_start();
 		if (isset($_SESSION["errors"])) {
 			$errors = $_SESSION["errors"];
 			
-			// clear message after use
+			
 			$_SESSION["errors"] = null;
 			
 			return $errors;
