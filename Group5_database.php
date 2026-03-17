@@ -1,20 +1,29 @@
 <?php
-$host = "localhost";
-$dbname = "group5sp26";
-$dbusername = "group5sp26";
-$dbpassword = "oleMissSp26";
+class Group5_Database {
 
-try {
-    $db = new PDO(
-        "mysql:host=$host;dbname=$dbname;charset=utf8mb4",
-        $dbusername,
-        $dbpassword
-    );
+    private static $connection;
 
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    public static function DBConnect() {
+        if (!isset(self::$connection)) {
 
-} catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
+            $dsn = "mysql:host=localhost;dbname=group5sp26;charset=utf8mb4";
+            $username = "group5sp26";
+            $password = "YOUR_DB_PASSWORD";
+
+            try {
+                self::$connection = new PDO($dsn, $username, $password);
+                self::$connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            }
+            catch (PDOException $e) {
+                die("Database connection failed: " . $e->getMessage());
+            }
+        }
+
+        return self::$connection;
+    }
+
+    public static function DBDisconnect() {
+        self::$connection = null;
+    }
 }
 ?>
