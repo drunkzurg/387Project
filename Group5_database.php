@@ -1,29 +1,34 @@
 <?php
+
 class Group5_Database {
 
-    private static $connection;
+    public function __construct() {
+        die("Init function error");
+    }
 
     public static function DBConnect() {
-        if (!isset(self::$connection)) {
+        require_once("/home/group5sp26/DBGroup5.php");
+        $mysqli = null;
 
-            $dsn = "mysql:host=localhost;dbname=group5sp26;charset=utf8mb4";
-            $username = "group5sp26";
-            $password = "oleMissSp26";
-
-            try {
-                self::$connection = new PDO($dsn, $username, $password);
-                self::$connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            }
-            catch (PDOException $e) {
-                die("Database connection failed: " . $e->getMessage());
-            }
+        try {
+            $mysqli = new PDO(
+                'mysql:host=' . DBHOST . ';dbname=' . DBNAME,
+                USERNAME,
+                PASSWORD
+            );
+            echo "Connection Succesfull.";
+        }
+        catch (PDOException $e) {
+            echo "Could not connect.";
+            die($e->getMessage());
         }
 
-        return self::$connection;
+        return $mysqli;
     }
 
     public static function DBDisconnect() {
-        self::$connection = null;
+        $mysqli = null;
     }
 }
+
 ?>
