@@ -27,39 +27,37 @@ if (isset($_POST["submit"])) {
         $username = trim($_POST["username"]);
         $password = $_POST["password"];
 
-        // Temporary hardcoded login until database is working
-        if ($username === "admin" && $password === "password") {
-            $_SESSION["user_id"] = 1;
-            $_SESSION["username"] = "admin";
-            $_SESSION["role"] = "system_admin";
-            redirect_by_role();
-        } 
-        elseif ($username === "owner" && $password === "password") {
-            $_SESSION["user_id"] = 2;
-            $_SESSION["username"] = "owner";
-            $_SESSION["role"] = "owner";
-            redirect_by_role();
-        } 
-        elseif ($username === "manager" && $password === "password") {
-            $_SESSION["user_id"] = 3;
-            $_SESSION["username"] = "manager";
-            $_SESSION["role"] = "manager";
-            redirect_by_role();
-        } 
-        elseif ($username === "employee" && $password === "password") {
-            $_SESSION["user_id"] = 4;
-            $_SESSION["username"] = "employee";
-            $_SESSION["role"] = "employee";
-            redirect_by_role();
-        } 
-        elseif ($username === "hr" && $password === "password") {
-            $_SESSION["user_id"] = 5;
-            $_SESSION["username"] = "hr";
-            $_SESSION["role"] = "hr";
-            redirect_by_role();
-        } 
-        else {
-            $_SESSION["message"] = "Username/password not found.";
+        $sql = "SELECT user_id, username, password_hash, role, is_active
+                FROM USERS
+                WHERE username = :username 
+                LIMIT 1";
+
+        $stmt = $db->prepare($sql);
+        $stmt->bindValue(':username', $username);
+        $stmt->execute();
+
+        $user = $stmt->fetch();
+
+        if ($user) {
+
+            if ((int)$user["is_active"] !== 1) {
+                $_SESSION["message"] = "Account is inactive.";
+                redirect("index.php");
+            }
+
+            if (password_check($password, $user["password_hash"])) {
+                $_SESSION["user_id"] = $user["user_id"];
+                $_SESSION["username"] = $user["username"];
+                $_SESSION["role"] = $user["role"];
+
+                redirect_by_role();
+            } else {
+                $_SESSION["message"] = "Invalid username or password.";
+                redirect("index.php");
+            }
+
+        } else {
+            $_SESSION["message"] = "Invalid username or password.";
             redirect("index.php");
         }
 
@@ -67,8 +65,8 @@ if (isset($_POST["submit"])) {
         $_SESSION["message"] = "Please fill in all information.";
         redirect("index.php");
     }
-}
-else {
+
+} else {
 
     echo '
     <form method="post" action="index.php">
@@ -85,5 +83,4 @@ else {
 echo '</div></div></div>';
 
 new_footer();
-
 ?>
