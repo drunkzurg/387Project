@@ -4,6 +4,7 @@ error_reporting(E_ALL);
 
 require_once('Group5_functions.php');
 require_once('Group5_session.php');
+require_once('Group5_database.php');
 
 verify_logout();
 
