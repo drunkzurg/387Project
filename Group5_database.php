@@ -8,7 +8,7 @@ class Group5_Database {
 
             $dsn = "mysql:host=localhost;dbname=group5sp26;charset=utf8mb4";
             $username = "group5sp26";
-            $password = "YOUR_DB_PASSWORD";
+            $password = "oleMissSp26";
 
             try {
                 self::$connection = new PDO($dsn, $username, $password);
