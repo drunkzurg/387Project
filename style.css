@@ -1,0 +1,165 @@
+body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at center, rgba(20, 40, 80, 0.45) 0%, rgba(0, 0, 0, 0.92) 65%),
+        #05070d;
+    color: #f4f7ff;
+    font-family: "Trebuchet MS", Arial, sans-serif;
+}
+
+.contain-to-grid,
+.top-bar {
+    background: transparent !important;
+    box-shadow: none;
+    border: none;
+}
+
+.top-bar h1,
+.top-bar .name,
+.top-bar h1 a {
+    color: #8ffcff !important;
+    text-shadow: 0 0 6px rgba(143, 252, 255, 0.9), 0 0 16px rgba(49, 211, 255, 0.65);
+}
+
+.row {
+    text-align: center;
+}
+
+#main {
+    width: 520px;
+    height: 820px;
+    margin: 20px auto 40px auto;
+    position: relative;
+    /*background-image: url('images/machine.png');*/
+    background-repeat: no-repeat;
+    background-position: center top;
+    background-size: contain;
+}
+
+#main > div[style] {
+    margin-top: 0 !important;
+    height: 100%;
+}
+
+#main .row {
+    position: absolute;
+    top: 210px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 255px;
+    padding: 18px 18px 22px 18px;
+    border-radius: 12px;
+    background: rgba(3, 10, 20, 0.82);
+    border: 2px solid rgba(84, 241, 255, 0.85);
+    box-shadow:
+        0 0 10px rgba(84, 241, 255, 0.75),
+        0 0 22px rgba(84, 241, 255, 0.45),
+        inset 0 0 10px rgba(84, 241, 255, 0.18);
+}
+
+#main h3 {
+    margin: 0 0 16px 0;
+    font-size: 18px;
+    line-height: 1.35;
+    color: #8ffcff;
+    text-shadow: 0 0 5px rgba(143, 252, 255, 0.95), 0 0 12px rgba(63, 205, 255, 0.55);
+}
+
+#main form {
+    margin: 0;
+}
+
+#main p {
+    margin: 10px 0;
+    color: #d6ecff;
+    font-size: 14px;
+    text-shadow: 0 0 6px rgba(76, 162, 255, 0.35);
+}
+
+#main input[type="text"],
+#main input[type="password"] {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 6px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(109, 248, 255, 0.8);
+    background: rgba(0, 8, 18, 0.92);
+    color: #ecffff;
+    outline: none;
+    box-shadow: inset 0 0 8px rgba(66, 232, 255, 0.18), 0 0 8px rgba(66, 232, 255, 0.18);
+}
+
+#main input[type="text"]:focus,
+#main input[type="password"]:focus {
+    border-color: #ff4fd8;
+    box-shadow:
+        0 0 10px rgba(255, 79, 216, 0.65),
+        inset 0 0 8px rgba(255, 79, 216, 0.2);
+}
+
+#main .button,
+#main input[type="submit"] {
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #ff4fd8 0%, #8f4bff 100%);
+    color: #ffffff;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 79, 216, 0.55), 0 0 18px rgba(143, 75, 255, 0.45);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#main .button:hover,
+#main input[type="submit"]:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 14px rgba(255, 79, 216, 0.8), 0 0 24px rgba(143, 75, 255, 0.55);
+}
+
+#main a {
+    color: #ffe66d;
+    text-decoration: none;
+    text-shadow: 0 0 7px rgba(255, 230, 109, 0.55);
+}
+
+#main a:hover {
+    text-decoration: underline;
+}
+
+.alert-box.info {
+    max-width: 420px;
+    margin: 12px auto;
+    background: rgba(6, 17, 32, 0.92);
+    color: #8ffcff;
+    border: 1px solid rgba(84, 241, 255, 0.75);
+    box-shadow: 0 0 10px rgba(84, 241, 255, 0.35);
+}
+
+small {
+    color: #9cb6d6;
+}
+
+@media (max-width: 640px) {
+    #main {
+        width: 92vw;
+        height: 145vw;
+        max-width: 520px;
+        max-height: 820px;
+    }
+
+    #main .row {
+        top: 25.5%;
+        width: 49%;
+        min-width: 220px;
+    }
+
+    #main h3 {
+        font-size: 16px;
+    }
+}
