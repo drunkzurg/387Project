@@ -14,6 +14,7 @@ function new_header($name = "Arcade Management", $urlLink = "index.php") {
     echo "    <title>$name</title>";
     echo "    <link rel='stylesheet' href='css/normalize.css'>";
     echo "    <link rel='stylesheet' href='css/foundation.css'>";
+    echo "    <link rel='stylesheet' href='css/style.css'>";
     echo "    <script src='js/vendor/modernizr.js'></script>";
     echo "</head>";
     echo "<body>";
