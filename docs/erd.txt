@@ -1,0 +1,108 @@
+// Copy of ERD used for this project
+// (source: /home/bpaudel2/public_html/387Project/erd.txt)
+
+Table users {
+  user_id integer [primary key]
+  name varchar
+  email varchar
+  password varchar
+  role varchar          // sys_admin, owner, employee, hr
+}
+
+Table departments {
+  department_id integer [primary key]
+  name varchar            // arcade, giftshop
+}
+
+Table employees {
+  employee_id integer [primary key]
+  user_id integer [not null]
+  name varchar
+  department_id integer
+  hourly_wage float       // set by owner
+  status varchar          // active, transferred, terminated
+}
+
+Table employee_shifts {
+  shift_id integer [primary key]
+  employee_id integer [not null]
+  start_time datetime
+  end_time datetime
+}
+
+Table employee_hours {
+  log_id integer [primary key]
+  employee_id integer [not null]
+  date date
+  hours_worked float
+}
+
+Table arcades {
+  arcade_id integer [primary key]
+  name varchar
+  cost_per_play float
+  ticket_min integer
+  ticket_max integer
+  num_players integer
+  status varchar        // active, inactive, maintenance
+}
+
+Table arcade_usage_logs {
+  usage_id integer [primary key]
+  arcade_id integer [not null]
+  user_id integer        // employee supervising
+  plays_count integer
+  revenue_generated float
+  tickets_dispensed integer
+  date date
+}
+
+Table prizes {
+  prize_id integer [primary key]
+  name varchar
+  ticket_cost integer     // cost in tickets
+  cost_price float        // real-world cost to business
+  stock integer
+  category varchar
+}
+
+Table prize_redemptions {
+  redemption_id integer [primary key]
+  prize_id integer [not null]
+  employee_id integer
+  tickets_used integer
+  quantity integer
+  date date
+}
+
+Table employee_transfers {
+  transfer_id integer [primary key]
+  employee_id integer [not null]
+  from_department integer
+  to_department integer
+  date date
+  handled_by_user_id integer   // HR user
+}
+
+Table revenue_reports {
+  report_id integer [primary key]
+  total_arcade_revenue float
+  total_prize_cost float
+  total_wages_paid float
+  net_profit float
+  start_date date
+  end_date date
+  generated_by integer
+}
+
+Ref: employees.user_id > users.user_id
+Ref: employees.department_id > departments.department_id
+Ref: employee_shifts.employee_id > employees.employee_id
+Ref: employee_hours.employee_id > employees.employee_id
+Ref: arcade_usage_logs.arcade_id > arcades.arcade_id
+Ref: arcade_usage_logs.user_id > users.user_id
+Ref: prize_redemptions.prize_id > prizes.prize_id
+Ref: prize_redemptions.employee_id > employees.employee_id
+Ref: employee_transfers.employee_id > employees.employee_id
+Ref: employee_transfers.handled_by_user_id > users.user_id
+Ref: revenue_reports.generated_by > users.user_id
