@@ -5,13 +5,20 @@ Table users {
   user_id integer [primary key]
   name varchar
   email varchar
-  password varchar
-  role varchar          // sys_admin, owner, employee, hr
+  password_hash varchar
+  role varchar              // sys_admin, owner, employee, hr
+  pending_approval boolean
 }
 
 Table departments {
   department_id integer [primary key]
-  name varchar            // arcade, giftshop
+  name varchar
+  department_type varchar   // play_area, gift_shop, customer_support
+  entrance_fee_tickets integer
+  operating_status varchar  // active, out_of_order, inactive
+  description varchar
+  created_at datetime
+  updated_at datetime
 }
 
 Table employees {
@@ -19,8 +26,8 @@ Table employees {
   user_id integer [not null]
   name varchar
   department_id integer
-  hourly_wage float       // set by owner
-  status varchar          // active, transferred, terminated
+  hourly_wage float
+  status varchar            // active, transferred, terminated
 }
 
 Table employee_shifts {
@@ -37,72 +44,136 @@ Table employee_hours {
   hours_worked float
 }
 
-Table arcades {
-  arcade_id integer [primary key]
-  name varchar
-  cost_per_play float
-  ticket_min integer
-  ticket_max integer
-  num_players integer
-  status varchar        // active, inactive, maintenance
-}
-
-Table arcade_usage_logs {
-  usage_id integer [primary key]
-  arcade_id integer [not null]
-  user_id integer        // employee supervising
-  plays_count integer
-  revenue_generated float
-  tickets_dispensed integer
-  date date
-}
-
-Table prizes {
-  prize_id integer [primary key]
-  name varchar
-  ticket_cost integer     // cost in tickets
-  cost_price float        // real-world cost to business
-  stock integer
-  category varchar
-}
-
-Table prize_redemptions {
-  redemption_id integer [primary key]
-  prize_id integer [not null]
-  employee_id integer
-  tickets_used integer
-  quantity integer
-  date date
-}
-
 Table employee_transfers {
   transfer_id integer [primary key]
   employee_id integer [not null]
   from_department integer
   to_department integer
   date date
-  handled_by_user_id integer   // HR user
+  handled_by_user_id integer
+}
+
+Table attendees {
+  attendee_id integer [primary key]
+  name varchar
+  email varchar
+  membership_code varchar
+  phone varchar
+  is_member boolean
+  verified_by_employee_id integer
+  verified_at datetime
+  created_at datetime
+}
+
+Table attendee_sessions {
+  session_id integer [primary key]
+  attendee_id integer
+  department_id integer [not null]
+  employee_id integer [not null]
+  display_name varchar
+  admission_mode varchar    // walk_in, member_wallet, manual_override
+  entrance_fee_tickets integer
+  payout_tickets integer
+  notes varchar
+  opened_at datetime
+  closed_at datetime
+}
+
+Table gift_shop_items {
+  gift_shop_item_id integer [primary key]
+  name varchar
+  ticket_price integer
+  cost_price float
+  stock integer
+  status varchar            // active, inactive
+  category varchar
+  description varchar
+  created_at datetime
+  updated_at datetime
+}
+
+Table ticket_accounts {
+  ticket_account_id integer [primary key]
+  account_code varchar
+  account_kind varchar      // gift_shop_budget, gift_shop_revenue, gift_shop_investment, department_reserve, department_generated, member_wallet, session_wallet
+  department_id integer
+  attendee_id integer
+  attendee_session_id integer
+  balance integer
+  created_at datetime
+  updated_at datetime
+}
+
+Table ticket_transactions {
+  ticket_transaction_id integer [primary key]
+  transaction_type varchar  // department_admission, department_payout, gift_shop_redemption, owner_allocation, owner_generated_transfer, owner_investment, member_claim_transfer, manual_override
+  source_account_id integer
+  destination_account_id integer
+  amount integer
+  department_id integer
+  attendee_id integer
+  attendee_session_id integer
+  employee_id integer
+  gift_shop_item_id integer
+  created_by_user_id integer
+  note varchar
+  created_at datetime
+}
+
+Table gift_shop_redemptions {
+  redemption_id integer [primary key]
+  gift_shop_item_id integer [not null]
+  department_id integer [not null]
+  employee_id integer [not null]
+  attendee_id integer
+  attendee_session_id integer
+  source_account_id integer [not null]
+  quantity integer
+  total_tickets integer
+  notes varchar
+  redeemed_at datetime
 }
 
 Table revenue_reports {
   report_id integer [primary key]
-  total_arcade_revenue float
-  total_prize_cost float
-  total_wages_paid float
-  net_profit float
+  total_ticket_admissions integer
+  total_ticket_payouts integer
+  total_gift_shop_redemptions integer
+  total_owner_investment integer
+  active_attendees integer
   start_date date
   end_date date
   generated_by integer
+  created_at datetime
 }
 
 Ref: employees.user_id > users.user_id
 Ref: employees.department_id > departments.department_id
 Ref: employee_shifts.employee_id > employees.employee_id
 Ref: employee_hours.employee_id > employees.employee_id
-Ref: arcade_usage_logs.arcade_id > arcades.arcade_id
-Ref: arcade_usage_logs.user_id > users.user_id
-Ref: prize_redemptions.prize_id > prizes.prize_id
-Ref: prize_redemptions.employee_id > employees.employee_id
 Ref: employee_transfers.employee_id > employees.employee_id
+Ref: employee_transfers.from_department > departments.department_id
+Ref: employee_transfers.to_department > departments.department_id
 Ref: employee_transfers.handled_by_user_id > users.user_id
+Ref: attendees.verified_by_employee_id > employees.employee_id
+Ref: attendee_sessions.attendee_id > attendees.attendee_id
+Ref: attendee_sessions.department_id > departments.department_id
+Ref: attendee_sessions.employee_id > employees.employee_id
+Ref: ticket_accounts.department_id > departments.department_id
+Ref: ticket_accounts.attendee_id > attendees.attendee_id
+Ref: ticket_accounts.attendee_session_id > attendee_sessions.session_id
+Ref: ticket_transactions.source_account_id > ticket_accounts.ticket_account_id
+Ref: ticket_transactions.destination_account_id > ticket_accounts.ticket_account_id
+Ref: ticket_transactions.department_id > departments.department_id
+Ref: ticket_transactions.attendee_id > attendees.attendee_id
+Ref: ticket_transactions.attendee_session_id > attendee_sessions.session_id
+Ref: ticket_transactions.employee_id > employees.employee_id
+Ref: ticket_transactions.gift_shop_item_id > gift_shop_items.gift_shop_item_id
+Ref: ticket_transactions.created_by_user_id > users.user_id
+Ref: gift_shop_redemptions.gift_shop_item_id > gift_shop_items.gift_shop_item_id
+Ref: gift_shop_redemptions.department_id > departments.department_id
+Ref: gift_shop_redemptions.employee_id > employees.employee_id
+Ref: gift_shop_redemptions.attendee_id > attendees.attendee_id
+Ref: gift_shop_redemptions.attendee_session_id > attendee_sessions.session_id
+Ref: gift_shop_redemptions.source_account_id > ticket_accounts.ticket_account_id
 Ref: revenue_reports.generated_by > users.user_id

@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Database/Database.php';
+require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
+
+debugToolbarHandleRequest();
+
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
@@ -42,6 +46,7 @@ $shifts = $shifts->fetchAll();
   <title>Manage Shifts</title>
 </head>
 <body>
+  <?php echo debugToolbarRender($user); ?>
   <h1>Manage Shifts for <?php echo htmlspecialchars($employee['name']); ?></h1>
   <form method="post" action="">
     <label>Start Time: <input type="datetime-local" name="start_time" required></label><br>

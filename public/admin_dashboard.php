@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Database/Database.php';
+require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
+
+debugToolbarHandleRequest();
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
@@ -60,6 +63,7 @@ $pendingUsers = $stmt->fetchAll();
   <title>Admin Dashboard - Pending Approvals</title>
 </head>
 <body>
+  <?php echo debugToolbarRender($currentUser); ?>
   <h1>Admin Dashboard</h1>
   <h2>Pending Account Approvals</h2>
   <?php if (count($pendingUsers) === 0): ?>

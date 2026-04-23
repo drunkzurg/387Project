@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Database/Database.php';
+require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
+
+debugToolbarHandleRequest();
+
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
@@ -36,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['department_id'])) {
   <title>Transfer Employee</title>
 </head>
 <body>
+  <?php echo debugToolbarRender($user); ?>
   <h1>Transfer Employee</h1>
   <form method="post" action="">
     <label>Employee: <strong><?php echo htmlspecialchars($employee['name']); ?></strong></label><br>

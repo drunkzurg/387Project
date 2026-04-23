@@ -1,0 +1,923 @@
+<?php
+
+final class TicketService
+{
+    public function __construct()
+    {
+        throw new RuntimeException('TicketService is a static utility.');
+    }
+
+    public static function ensureInfrastructure(PDO $pdo): void
+    {
+        self::ensureSystemAccount($pdo, 'gift_shop_budget');
+        self::ensureSystemAccount($pdo, 'gift_shop_revenue');
+        self::ensureSystemAccount($pdo, 'gift_shop_investment');
+
+        $departments = $pdo->query('SELECT department_id FROM departments')->fetchAll();
+        foreach ($departments as $department) {
+            self::ensureDepartmentAccounts($pdo, (int)$department['department_id']);
+        }
+    }
+
+    public static function createDepartment(
+        PDO $pdo,
+        string $name,
+        string $departmentType,
+        int $entranceFeeTickets,
+        string $operatingStatus,
+        string $description
+    ): int {
+        $name = trim($name);
+        $description = trim($description);
+        self::assertDepartmentInput($name, $departmentType, $entranceFeeTickets, $operatingStatus);
+
+        $pdo->beginTransaction();
+
+        try {
+            $stmt = $pdo->prepare(
+                'INSERT INTO departments (name, department_type, entrance_fee_tickets, operating_status, description)
+                 VALUES (:name, :department_type, :entrance_fee_tickets, :operating_status, :description)'
+            );
+            $stmt->execute([
+                'name' => $name,
+                'department_type' => $departmentType,
+                'entrance_fee_tickets' => self::normalizeEntranceFee($departmentType, $entranceFeeTickets),
+                'operating_status' => $operatingStatus,
+                'description' => $description !== '' ? $description : null,
+            ]);
+
+            $departmentId = (int)$pdo->lastInsertId();
+            self::ensureDepartmentAccounts($pdo, $departmentId);
+            self::adjustDepartmentStatus($pdo, $departmentId);
+
+            $pdo->commit();
+
+            return $departmentId;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
+    public static function updateDepartment(
+        PDO $pdo,
+        int $departmentId,
+        string $name,
+        string $departmentType,
+        int $entranceFeeTickets,
+        string $operatingStatus,
+        string $description
+    ): void {
+        $name = trim($name);
+        $description = trim($description);
+        self::assertDepartmentInput($name, $departmentType, $entranceFeeTickets, $operatingStatus);
+
+        $stmt = $pdo->prepare(
+            'UPDATE departments
+             SET name = :name,
+                 department_type = :department_type,
+                 entrance_fee_tickets = :entrance_fee_tickets,
+                 operating_status = :operating_status,
+                 description = :description
+             WHERE department_id = :department_id'
+        );
+        $stmt->execute([
+            'department_id' => $departmentId,
+            'name' => $name,
+            'department_type' => $departmentType,
+            'entrance_fee_tickets' => self::normalizeEntranceFee($departmentType, $entranceFeeTickets),
+            'operating_status' => $operatingStatus,
+            'description' => $description !== '' ? $description : null,
+        ]);
+
+        self::ensureDepartmentAccounts($pdo, $departmentId);
+        self::adjustDepartmentStatus($pdo, $departmentId);
+    }
+
+    public static function createGiftShopItem(
+        PDO $pdo,
+        string $name,
+        int $ticketPrice,
+        float $costPrice,
+        int $stock,
+        string $category,
+        string $description
+    ): void {
+        $name = trim($name);
+        $category = trim($category);
+        $description = trim($description);
+
+        if ($name === '') {
+            throw new RuntimeException('Gift shop items must have a name.');
+        }
+        if ($ticketPrice < 10 || $ticketPrice > 1000) {
+            throw new RuntimeException('Gift shop item prices must stay between 10 and 1000 tickets.');
+        }
+        if ($stock < 0) {
+            throw new RuntimeException('Gift shop item stock cannot be negative.');
+        }
+        if ($costPrice < 0) {
+            throw new RuntimeException('Gift shop item cost cannot be negative.');
+        }
+
+        $stmt = $pdo->prepare(
+            'INSERT INTO gift_shop_items (name, ticket_price, cost_price, stock, category, description)
+             VALUES (:name, :ticket_price, :cost_price, :stock, :category, :description)'
+        );
+        $stmt->execute([
+            'name' => $name,
+            'ticket_price' => $ticketPrice,
+            'cost_price' => number_format($costPrice, 2, '.', ''),
+            'stock' => $stock,
+            'category' => $category !== '' ? $category : null,
+            'description' => $description !== '' ? $description : null,
+        ]);
+    }
+
+    public static function updateGiftShopItem(
+        PDO $pdo,
+        int $itemId,
+        string $name,
+        int $ticketPrice,
+        float $costPrice,
+        int $stock,
+        string $status,
+        string $category,
+        string $description
+    ): void {
+        $name = trim($name);
+        $category = trim($category);
+        $description = trim($description);
+
+        if ($name === '') {
+            throw new RuntimeException('Gift shop items must have a name.');
+        }
+        if ($ticketPrice < 10 || $ticketPrice > 1000) {
+            throw new RuntimeException('Gift shop item prices must stay between 10 and 1000 tickets.');
+        }
+        if ($stock < 0) {
+            throw new RuntimeException('Gift shop item stock cannot be negative.');
+        }
+        if ($costPrice < 0) {
+            throw new RuntimeException('Gift shop item cost cannot be negative.');
+        }
+        if (!in_array($status, ['active', 'inactive'], true)) {
+            throw new RuntimeException('Invalid gift shop item status.');
+        }
+
+        $stmt = $pdo->prepare(
+            'UPDATE gift_shop_items
+             SET name = :name,
+                 ticket_price = :ticket_price,
+                 cost_price = :cost_price,
+                 stock = :stock,
+                 status = :status,
+                 category = :category,
+                 description = :description
+             WHERE gift_shop_item_id = :item_id'
+        );
+        $stmt->execute([
+            'item_id' => $itemId,
+            'name' => $name,
+            'ticket_price' => $ticketPrice,
+            'cost_price' => number_format($costPrice, 2, '.', ''),
+            'stock' => $stock,
+            'status' => $status,
+            'category' => $category !== '' ? $category : null,
+            'description' => $description !== '' ? $description : null,
+        ]);
+    }
+
+    public static function addInvestment(PDO $pdo, int $amount, ?int $createdByUserId = null): void
+    {
+        if ($amount <= 0) {
+            throw new RuntimeException('Investment tickets must be greater than zero.');
+        }
+
+        $pdo->beginTransaction();
+
+        try {
+            $budgetAccount = self::ensureSystemAccount($pdo, 'gift_shop_budget');
+            $investmentAccount = self::ensureSystemAccount($pdo, 'gift_shop_investment');
+
+            self::postTransaction(
+                $pdo,
+                'owner_investment',
+                $amount,
+                null,
+                (int)$budgetAccount['ticket_account_id'],
+                ['created_by_user_id' => $createdByUserId, 'note' => 'Owner added ticket budget.']
+            );
+            self::postTransaction(
+                $pdo,
+                'owner_investment',
+                $amount,
+                null,
+                (int)$investmentAccount['ticket_account_id'],
+                ['created_by_user_id' => $createdByUserId, 'note' => 'Reporting counter for owner-backed tickets.']
+            );
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
+    public static function allocateDepartmentReserve(PDO $pdo, int $departmentId, int $amount, ?int $createdByUserId = null): void
+    {
+        if ($amount <= 0) {
+            throw new RuntimeException('Allocation tickets must be greater than zero.');
+        }
+
+        $pdo->beginTransaction();
+
+        try {
+            $budgetAccount = self::ensureSystemAccount($pdo, 'gift_shop_budget');
+            $reserveAccount = self::ensureAccount($pdo, 'department_reserve', $departmentId);
+
+            self::postTransaction(
+                $pdo,
+                'owner_allocation',
+                $amount,
+                (int)$budgetAccount['ticket_account_id'],
+                (int)$reserveAccount['ticket_account_id'],
+                ['department_id' => $departmentId, 'created_by_user_id' => $createdByUserId]
+            );
+
+            self::adjustDepartmentStatus($pdo, $departmentId);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
+    public static function transferGeneratedToBudget(PDO $pdo, int $departmentId, int $amount, ?int $createdByUserId = null): void
+    {
+        if ($amount <= 0) {
+            throw new RuntimeException('Transfer tickets must be greater than zero.');
+        }
+
+        $pdo->beginTransaction();
+
+        try {
+            $generatedAccount = self::ensureAccount($pdo, 'department_generated', $departmentId);
+            $budgetAccount = self::ensureSystemAccount($pdo, 'gift_shop_budget');
+
+            self::postTransaction(
+                $pdo,
+                'owner_generated_transfer',
+                $amount,
+                (int)$generatedAccount['ticket_account_id'],
+                (int)$budgetAccount['ticket_account_id'],
+                ['department_id' => $departmentId, 'created_by_user_id' => $createdByUserId]
+            );
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
+    public static function openSession(
+        PDO $pdo,
+        int $employeeId,
+        int $departmentId,
+        string $displayName,
+        string $admissionMode,
+        ?int $attendeeId,
+        ?int $createdByUserId = null,
+        string $notes = ''
+    ): int {
+        $displayName = trim($displayName);
+        $notes = trim($notes);
+
+        if ($displayName === '') {
+            throw new RuntimeException('Sessions need a display name.');
+        }
+        if (!in_array($admissionMode, ['walk_in', 'member_wallet', 'manual_override'], true)) {
+            throw new RuntimeException('Invalid admission mode.');
+        }
+
+        $department = self::fetchDepartment($pdo, $departmentId);
+        if ($department === null || $department['department_type'] !== 'play_area') {
+            throw new RuntimeException('Sessions can only be opened for play-area departments.');
+        }
+        if ($department['operating_status'] !== 'active') {
+            throw new RuntimeException('This department is not active and cannot admit attendees right now.');
+        }
+
+        if ($admissionMode === 'member_wallet' && $attendeeId === null) {
+            throw new RuntimeException('Member-wallet admissions require a member selection.');
+        }
+
+        $pdo->beginTransaction();
+
+        try {
+            $stmt = $pdo->prepare(
+                'INSERT INTO attendee_sessions (attendee_id, department_id, employee_id, display_name, admission_mode, entrance_fee_tickets, notes)
+                 VALUES (:attendee_id, :department_id, :employee_id, :display_name, :admission_mode, :entrance_fee_tickets, :notes)'
+            );
+            $stmt->execute([
+                'attendee_id' => $admissionMode === 'member_wallet' ? $attendeeId : null,
+                'department_id' => $departmentId,
+                'employee_id' => $employeeId,
+                'display_name' => $displayName,
+                'admission_mode' => $admissionMode,
+                'entrance_fee_tickets' => (int)$department['entrance_fee_tickets'],
+                'notes' => $notes !== '' ? $notes : null,
+            ]);
+
+            $sessionId = (int)$pdo->lastInsertId();
+            self::ensureAccount($pdo, 'session_wallet', null, null, $sessionId);
+            $generatedAccount = self::ensureAccount($pdo, 'department_generated', $departmentId);
+
+            if ((int)$department['entrance_fee_tickets'] > 0) {
+                $transactionType = $admissionMode === 'manual_override' ? 'manual_override' : 'department_admission';
+                $sourceAccountId = null;
+                if ($admissionMode === 'member_wallet') {
+                    $memberWallet = self::ensureAccount($pdo, 'member_wallet', null, $attendeeId);
+                    $sourceAccountId = (int)$memberWallet['ticket_account_id'];
+                }
+
+                self::postTransaction(
+                    $pdo,
+                    $transactionType,
+                    (int)$department['entrance_fee_tickets'],
+                    $sourceAccountId,
+                    (int)$generatedAccount['ticket_account_id'],
+                    [
+                        'department_id' => $departmentId,
+                        'attendee_id' => $admissionMode === 'member_wallet' ? $attendeeId : null,
+                        'attendee_session_id' => $sessionId,
+                        'employee_id' => $employeeId,
+                        'created_by_user_id' => $createdByUserId,
+                        'note' => $notes !== '' ? $notes : null,
+                    ]
+                );
+            }
+
+            $pdo->commit();
+
+            return $sessionId;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
+    public static function closeSession(
+        PDO $pdo,
+        int $sessionId,
+        int $employeeId,
+        int $payoutTickets,
+        ?int $createdByUserId = null,
+        string $notes = ''
+    ): void {
+        if ($payoutTickets < 0) {
+            throw new RuntimeException('Payout tickets cannot be negative.');
+        }
+
+        $session = self::fetchSession($pdo, $sessionId);
+        if ($session === null) {
+            throw new RuntimeException('Session not found.');
+        }
+        if ($session['closed_at'] !== null) {
+            throw new RuntimeException('This attendee session has already been closed.');
+        }
+
+        $notes = trim($notes);
+        $combinedNotes = trim((string)$session['notes']);
+        if ($notes !== '') {
+            $combinedNotes = $combinedNotes !== '' ? $combinedNotes . ' | ' . $notes : $notes;
+        }
+
+        $pdo->beginTransaction();
+
+        try {
+            if ($payoutTickets > 0) {
+                $reserveAccount = self::ensureAccount($pdo, 'department_reserve', (int)$session['department_id']);
+                $destinationAccount = null;
+
+                if ($session['attendee_id'] !== null && $session['admission_mode'] === 'member_wallet') {
+                    $destinationAccount = self::ensureAccount($pdo, 'member_wallet', null, (int)$session['attendee_id']);
+                } else {
+                    $destinationAccount = self::ensureAccount($pdo, 'session_wallet', null, null, $sessionId);
+                }
+
+                self::postTransaction(
+                    $pdo,
+                    'department_payout',
+                    $payoutTickets,
+                    (int)$reserveAccount['ticket_account_id'],
+                    (int)$destinationAccount['ticket_account_id'],
+                    [
+                        'department_id' => (int)$session['department_id'],
+                        'attendee_id' => $session['attendee_id'] !== null ? (int)$session['attendee_id'] : null,
+                        'attendee_session_id' => $sessionId,
+                        'employee_id' => $employeeId,
+                        'created_by_user_id' => $createdByUserId,
+                        'note' => $notes !== '' ? $notes : null,
+                    ]
+                );
+            }
+
+            $update = $pdo->prepare(
+                'UPDATE attendee_sessions
+                 SET payout_tickets = :payout_tickets,
+                     closed_at = NOW(),
+                     notes = :notes
+                 WHERE session_id = :session_id'
+            );
+            $update->execute([
+                'payout_tickets' => $payoutTickets,
+                'notes' => $combinedNotes !== '' ? $combinedNotes : null,
+                'session_id' => $sessionId,
+            ]);
+
+            self::adjustDepartmentStatus($pdo, (int)$session['department_id']);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
+    public static function redeemGiftShopItem(
+        PDO $pdo,
+        int $departmentId,
+        int $employeeId,
+        int $itemId,
+        int $quantity,
+        int $sourceAccountId,
+        ?int $attendeeId,
+        ?int $sessionId,
+        ?int $createdByUserId = null,
+        string $notes = ''
+    ): void {
+        if ($quantity <= 0) {
+            throw new RuntimeException('Redemption quantity must be greater than zero.');
+        }
+
+        $pdo->beginTransaction();
+
+        try {
+            $itemStmt = $pdo->prepare(
+                'SELECT gift_shop_item_id, ticket_price, stock, status
+                 FROM gift_shop_items
+                 WHERE gift_shop_item_id = :item_id
+                 LIMIT 1
+                 FOR UPDATE'
+            );
+            $itemStmt->execute(['item_id' => $itemId]);
+            $item = $itemStmt->fetch();
+
+            if (!$item) {
+                throw new RuntimeException('Gift shop item not found.');
+            }
+            if ($item['status'] !== 'active') {
+                throw new RuntimeException('This gift shop item is inactive.');
+            }
+            if ((int)$item['stock'] < $quantity) {
+                throw new RuntimeException('Not enough stock is available for that redemption.');
+            }
+
+            $totalTickets = (int)$item['ticket_price'] * $quantity;
+            $revenueAccount = self::ensureSystemAccount($pdo, 'gift_shop_revenue');
+
+            self::postTransaction(
+                $pdo,
+                'gift_shop_redemption',
+                $totalTickets,
+                $sourceAccountId,
+                (int)$revenueAccount['ticket_account_id'],
+                [
+                    'department_id' => $departmentId,
+                    'attendee_id' => $attendeeId,
+                    'attendee_session_id' => $sessionId,
+                    'employee_id' => $employeeId,
+                    'gift_shop_item_id' => $itemId,
+                    'created_by_user_id' => $createdByUserId,
+                    'note' => trim($notes) !== '' ? trim($notes) : null,
+                ]
+            );
+
+            $updateStock = $pdo->prepare(
+                'UPDATE gift_shop_items SET stock = stock - :quantity WHERE gift_shop_item_id = :item_id'
+            );
+            $updateStock->execute([
+                'quantity' => $quantity,
+                'item_id' => $itemId,
+            ]);
+
+            $insertRedemption = $pdo->prepare(
+                'INSERT INTO gift_shop_redemptions (
+                    gift_shop_item_id,
+                    department_id,
+                    employee_id,
+                    attendee_id,
+                    attendee_session_id,
+                    source_account_id,
+                    quantity,
+                    total_tickets,
+                    notes
+                 ) VALUES (
+                    :gift_shop_item_id,
+                    :department_id,
+                    :employee_id,
+                    :attendee_id,
+                    :attendee_session_id,
+                    :source_account_id,
+                    :quantity,
+                    :total_tickets,
+                    :notes
+                 )'
+            );
+            $insertRedemption->execute([
+                'gift_shop_item_id' => $itemId,
+                'department_id' => $departmentId,
+                'employee_id' => $employeeId,
+                'attendee_id' => $attendeeId,
+                'attendee_session_id' => $sessionId,
+                'source_account_id' => $sourceAccountId,
+                'quantity' => $quantity,
+                'total_tickets' => $totalTickets,
+                'notes' => trim($notes) !== '' ? trim($notes) : null,
+            ]);
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
+    public static function claimSessionToMember(
+        PDO $pdo,
+        int $sessionId,
+        int $employeeId,
+        string $name,
+        string $email,
+        string $membershipCode
+    ): int {
+        $name = trim($name);
+        $email = trim($email);
+        $membershipCode = trim($membershipCode);
+
+        if ($name === '' || $membershipCode === '') {
+            throw new RuntimeException('Member claims need a name and membership code.');
+        }
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            throw new RuntimeException('Member claim email must be valid.');
+        }
+
+        $session = self::fetchSession($pdo, $sessionId);
+        if ($session === null) {
+            throw new RuntimeException('Session not found.');
+        }
+        if ($session['closed_at'] === null) {
+            throw new RuntimeException('Only closed sessions can be claimed.');
+        }
+        if ($session['attendee_id'] !== null) {
+            throw new RuntimeException('That session is already linked to a member.');
+        }
+
+        $pdo->beginTransaction();
+
+        try {
+            $insertAttendee = $pdo->prepare(
+                'INSERT INTO attendees (name, email, membership_code, is_member, verified_by_employee_id, verified_at)
+                 VALUES (:name, :email, :membership_code, 1, :verified_by_employee_id, NOW())'
+            );
+            $insertAttendee->execute([
+                'name' => $name,
+                'email' => $email !== '' ? $email : null,
+                'membership_code' => $membershipCode,
+                'verified_by_employee_id' => $employeeId,
+            ]);
+            $attendeeId = (int)$pdo->lastInsertId();
+
+            $memberWallet = self::ensureAccount($pdo, 'member_wallet', null, $attendeeId);
+            $sessionWallet = self::ensureAccount($pdo, 'session_wallet', null, null, $sessionId);
+
+            if ((int)$sessionWallet['balance'] > 0) {
+                self::postTransaction(
+                    $pdo,
+                    'member_claim_transfer',
+                    (int)$sessionWallet['balance'],
+                    (int)$sessionWallet['ticket_account_id'],
+                    (int)$memberWallet['ticket_account_id'],
+                    [
+                        'department_id' => (int)$session['department_id'],
+                        'attendee_id' => $attendeeId,
+                        'attendee_session_id' => $sessionId,
+                        'employee_id' => $employeeId,
+                        'note' => 'Customer-support verification claim transfer.',
+                    ]
+                );
+            }
+
+            $updateSession = $pdo->prepare(
+                'UPDATE attendee_sessions
+                 SET attendee_id = :attendee_id
+                 WHERE session_id = :session_id'
+            );
+            $updateSession->execute([
+                'attendee_id' => $attendeeId,
+                'session_id' => $sessionId,
+            ]);
+
+            $pdo->commit();
+
+            return $attendeeId;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
+    public static function ensureSystemAccount(PDO $pdo, string $accountKind): array
+    {
+        return self::ensureAccount($pdo, $accountKind);
+    }
+
+    public static function ensureDepartmentAccounts(PDO $pdo, int $departmentId): void
+    {
+        self::ensureAccount($pdo, 'department_reserve', $departmentId);
+        self::ensureAccount($pdo, 'department_generated', $departmentId);
+    }
+
+    public static function ensureAccount(
+        PDO $pdo,
+        string $accountKind,
+        ?int $departmentId = null,
+        ?int $attendeeId = null,
+        ?int $sessionId = null
+    ): array {
+        $accountCode = self::buildAccountCode($accountKind, $departmentId, $attendeeId, $sessionId);
+        $select = $pdo->prepare(
+            'SELECT ticket_account_id, account_code, account_kind, department_id, attendee_id, attendee_session_id, balance
+             FROM ticket_accounts
+             WHERE account_code = :account_code
+             LIMIT 1'
+        );
+        $select->execute(['account_code' => $accountCode]);
+        $existing = $select->fetch();
+        if ($existing) {
+            return $existing;
+        }
+
+        $insert = $pdo->prepare(
+            'INSERT INTO ticket_accounts (account_code, account_kind, department_id, attendee_id, attendee_session_id)
+             VALUES (:account_code, :account_kind, :department_id, :attendee_id, :attendee_session_id)'
+        );
+        $insert->execute([
+            'account_code' => $accountCode,
+            'account_kind' => $accountKind,
+            'department_id' => $departmentId,
+            'attendee_id' => $attendeeId,
+            'attendee_session_id' => $sessionId,
+        ]);
+
+        $select->execute(['account_code' => $accountCode]);
+
+        return (array)$select->fetch();
+    }
+
+    public static function adjustDepartmentStatus(PDO $pdo, int $departmentId): void
+    {
+        $stmt = $pdo->prepare(
+            'SELECT department_type, operating_status
+             FROM departments
+             WHERE department_id = :department_id
+             LIMIT 1'
+        );
+        $stmt->execute(['department_id' => $departmentId]);
+        $department = $stmt->fetch();
+
+        if (!$department || $department['department_type'] !== 'play_area') {
+            return;
+        }
+        if ($department['operating_status'] === 'inactive') {
+            return;
+        }
+
+        $reserveAccount = self::ensureAccount($pdo, 'department_reserve', $departmentId);
+        $nextStatus = (int)$reserveAccount['balance'] > 0 ? 'active' : 'out_of_order';
+
+        $update = $pdo->prepare(
+            'UPDATE departments SET operating_status = :operating_status WHERE department_id = :department_id'
+        );
+        $update->execute([
+            'operating_status' => $nextStatus,
+            'department_id' => $departmentId,
+        ]);
+    }
+
+    public static function postTransaction(
+        PDO $pdo,
+        string $transactionType,
+        int $amount,
+        ?int $sourceAccountId,
+        ?int $destinationAccountId,
+        array $context = []
+    ): int {
+        if ($amount <= 0) {
+            throw new RuntimeException('Ticket transactions must move a positive amount.');
+        }
+        if ($sourceAccountId === null && $destinationAccountId === null) {
+            throw new RuntimeException('Ticket transactions need a source or destination account.');
+        }
+
+        if ($sourceAccountId !== null) {
+            $source = self::lockAccount($pdo, $sourceAccountId);
+            if ((int)$source['balance'] < $amount) {
+                throw new RuntimeException('That action would overdraw the selected ticket account.');
+            }
+
+            $updateSource = $pdo->prepare(
+                'UPDATE ticket_accounts SET balance = balance - :amount WHERE ticket_account_id = :ticket_account_id'
+            );
+            $updateSource->execute([
+                'amount' => $amount,
+                'ticket_account_id' => $sourceAccountId,
+            ]);
+        }
+
+        if ($destinationAccountId !== null) {
+            self::lockAccount($pdo, $destinationAccountId);
+            $updateDestination = $pdo->prepare(
+                'UPDATE ticket_accounts SET balance = balance + :amount WHERE ticket_account_id = :ticket_account_id'
+            );
+            $updateDestination->execute([
+                'amount' => $amount,
+                'ticket_account_id' => $destinationAccountId,
+            ]);
+        }
+
+        $insert = $pdo->prepare(
+            'INSERT INTO ticket_transactions (
+                transaction_type,
+                source_account_id,
+                destination_account_id,
+                amount,
+                department_id,
+                attendee_id,
+                attendee_session_id,
+                employee_id,
+                gift_shop_item_id,
+                created_by_user_id,
+                note
+             ) VALUES (
+                :transaction_type,
+                :source_account_id,
+                :destination_account_id,
+                :amount,
+                :department_id,
+                :attendee_id,
+                :attendee_session_id,
+                :employee_id,
+                :gift_shop_item_id,
+                :created_by_user_id,
+                :note
+             )'
+        );
+        $insert->execute([
+            'transaction_type' => $transactionType,
+            'source_account_id' => $sourceAccountId,
+            'destination_account_id' => $destinationAccountId,
+            'amount' => $amount,
+            'department_id' => $context['department_id'] ?? null,
+            'attendee_id' => $context['attendee_id'] ?? null,
+            'attendee_session_id' => $context['attendee_session_id'] ?? null,
+            'employee_id' => $context['employee_id'] ?? null,
+            'gift_shop_item_id' => $context['gift_shop_item_id'] ?? null,
+            'created_by_user_id' => $context['created_by_user_id'] ?? null,
+            'note' => $context['note'] ?? null,
+        ]);
+
+        return (int)$pdo->lastInsertId();
+    }
+
+    private static function assertDepartmentInput(
+        string $name,
+        string $departmentType,
+        int $entranceFeeTickets,
+        string $operatingStatus
+    ): void {
+        if ($name === '') {
+            throw new RuntimeException('Departments need a name.');
+        }
+        if (!in_array($departmentType, ['play_area', 'gift_shop', 'customer_support'], true)) {
+            throw new RuntimeException('Invalid department type.');
+        }
+        if (!in_array($operatingStatus, ['active', 'out_of_order', 'inactive'], true)) {
+            throw new RuntimeException('Invalid department status.');
+        }
+        if ($departmentType === 'play_area' && ($entranceFeeTickets < 10 || $entranceFeeTickets > 100)) {
+            throw new RuntimeException('Play-area entrance fees must stay between 10 and 100 tickets.');
+        }
+        if ($departmentType !== 'play_area' && $entranceFeeTickets < 0) {
+            throw new RuntimeException('Non-play-area entrance fees cannot be negative.');
+        }
+    }
+
+    private static function normalizeEntranceFee(string $departmentType, int $entranceFeeTickets): int
+    {
+        return $departmentType === 'play_area' ? $entranceFeeTickets : 0;
+    }
+
+    private static function fetchDepartment(PDO $pdo, int $departmentId): ?array
+    {
+        $stmt = $pdo->prepare(
+            'SELECT department_id, department_type, entrance_fee_tickets, operating_status
+             FROM departments
+             WHERE department_id = :department_id
+             LIMIT 1'
+        );
+        $stmt->execute(['department_id' => $departmentId]);
+        $department = $stmt->fetch();
+
+        return $department ?: null;
+    }
+
+    private static function fetchSession(PDO $pdo, int $sessionId): ?array
+    {
+        $stmt = $pdo->prepare(
+            'SELECT session_id, attendee_id, department_id, admission_mode, payout_tickets, notes, closed_at
+             FROM attendee_sessions
+             WHERE session_id = :session_id
+             LIMIT 1'
+        );
+        $stmt->execute(['session_id' => $sessionId]);
+        $session = $stmt->fetch();
+
+        return $session ?: null;
+    }
+
+    private static function lockAccount(PDO $pdo, int $accountId): array
+    {
+        $stmt = $pdo->prepare(
+            'SELECT ticket_account_id, balance
+             FROM ticket_accounts
+             WHERE ticket_account_id = :ticket_account_id
+             LIMIT 1
+             FOR UPDATE'
+        );
+        $stmt->execute(['ticket_account_id' => $accountId]);
+        $account = $stmt->fetch();
+
+        if (!$account) {
+            throw new RuntimeException('Ticket account not found.');
+        }
+
+        return $account;
+    }
+
+    private static function buildAccountCode(
+        string $accountKind,
+        ?int $departmentId = null,
+        ?int $attendeeId = null,
+        ?int $sessionId = null
+    ): string {
+        return match ($accountKind) {
+            'gift_shop_budget', 'gift_shop_revenue', 'gift_shop_investment' => $accountKind,
+            'department_reserve', 'department_generated' => $departmentId !== null
+                ? $accountKind . ':' . $departmentId
+                : throw new RuntimeException('Department ticket accounts require a department id.'),
+            'member_wallet' => $attendeeId !== null
+                ? $accountKind . ':' . $attendeeId
+                : throw new RuntimeException('Member wallets require an attendee id.'),
+            'session_wallet' => $sessionId !== null
+                ? $accountKind . ':' . $sessionId
+                : throw new RuntimeException('Session wallets require a session id.'),
+            default => throw new RuntimeException('Unknown ticket account kind.'),
+        };
+    }
+}

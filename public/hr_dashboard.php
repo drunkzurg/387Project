@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Database/Database.php';
+require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
+
+debugToolbarHandleRequest();
+
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
@@ -23,6 +27,7 @@ $departments = $pdo->query('SELECT department_id, name FROM departments ORDER BY
   <title>HR Dashboard</title>
 </head>
 <body>
+  <?php echo debugToolbarRender($user); ?>
   <h1>HR Dashboard</h1>
   <p><a href="logout.php">Logout</a></p>
   <h2>Employees</h2>

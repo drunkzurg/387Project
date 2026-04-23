@@ -4,6 +4,9 @@
 
 require_once __DIR__ . '/../src/Database/Database.php';
 require_once __DIR__ . '/../src/Auth/Auth.php';
+require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
+
+debugToolbarHandleRequest();
 
 if (isset($_GET['db_test']) && $_GET['db_test'] === '1') {
 	header('Content-Type: text/plain; charset=utf-8');
@@ -58,6 +61,7 @@ header('Content-Type: text/html; charset=utf-8');
 	<title>Arcade Management System</title>
 </head>
 <body>
+	<?php echo debugToolbarRender($user); ?>
 	<h1>Arcade Management System</h1>
 
 	<?php if ($user === null): ?>
@@ -74,7 +78,7 @@ header('Content-Type: text/html; charset=utf-8');
 			(<?php echo htmlspecialchars($user['role'], ENT_QUOTES, 'UTF-8'); ?>)
 		</p>
 		<p><a href="logout.php">Logout</a></p>
-		<p>Next: role-gated dashboards (coming next).</p>
+		<p>The dashboards are live with department staffing, ticket budgets, attendee sessions, member claims, and gift shop redemptions.</p>
 
 		<?php if ($user['role'] === 'sys_admin'): ?>
 			<p style="margin-top: 16px;"><a href="admin_dashboard.php">Admin Dashboard</a></p>

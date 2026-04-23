@@ -4,13 +4,15 @@
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS revenue_reports;
+DROP TABLE IF EXISTS gift_shop_redemptions;
+DROP TABLE IF EXISTS ticket_transactions;
+DROP TABLE IF EXISTS ticket_accounts;
+DROP TABLE IF EXISTS gift_shop_items;
+DROP TABLE IF EXISTS attendee_sessions;
+DROP TABLE IF EXISTS attendees;
 DROP TABLE IF EXISTS employee_transfers;
-DROP TABLE IF EXISTS prize_redemptions;
-DROP TABLE IF EXISTS arcade_usage_logs;
 DROP TABLE IF EXISTS employee_hours;
 DROP TABLE IF EXISTS employee_shifts;
-DROP TABLE IF EXISTS prizes;
-DROP TABLE IF EXISTS arcades;
 DROP TABLE IF EXISTS employees;
 DROP TABLE IF EXISTS departments;
 DROP TABLE IF EXISTS users;

@@ -1,6 +1,9 @@
 <?php
 
 require_once __DIR__ . '/../src/Auth/Auth.php';
+require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
+
+debugToolbarHandleRequest();
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
@@ -49,6 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <title>Login</title>
 </head>
 <body>
+  <?php echo debugToolbarRender($currentUser); ?>
   <h1>Login</h1>
 
   <?php if ($error !== null): ?>
