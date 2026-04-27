@@ -2,3 +2,6 @@
 /.env
 /storage/logs/*.log
 .DS_Store
+/neobrutalism-components/
+/node_modules/
+/public/assets/build/

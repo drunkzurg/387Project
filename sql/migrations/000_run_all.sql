@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS departments (
   name VARCHAR(100) NOT NULL,
   department_type ENUM('play_area','gift_shop','customer_support') NOT NULL DEFAULT 'play_area',
   entrance_fee_tickets INT UNSIGNED NOT NULL DEFAULT 10,
+  capacity INT UNSIGNED NOT NULL DEFAULT 0,
   operating_status ENUM('active','out_of_order','inactive') NOT NULL DEFAULT 'active',
   description VARCHAR(255) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -54,13 +55,37 @@ CREATE TABLE IF NOT EXISTS employee_shifts (
   shift_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   employee_id INT UNSIGNED NOT NULL,
   start_time DATETIME NOT NULL,
-  end_time DATETIME NOT NULL,
+  end_time DATETIME NULL,
+  entry_type ENUM('live','manual') NOT NULL DEFAULT 'manual',
   PRIMARY KEY (shift_id),
   KEY idx_shifts_employee (employee_id),
   KEY idx_shifts_start (start_time),
   CONSTRAINT fk_shifts_employee
     FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
     ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 004b_create_employee_sick_requests.sql
+CREATE TABLE IF NOT EXISTS employee_sick_requests (
+  sick_request_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  employee_id INT UNSIGNED NOT NULL,
+  request_date DATE NOT NULL,
+  status ENUM('waiting','approved','denied') NOT NULL DEFAULT 'waiting',
+  notes VARCHAR(255) NULL,
+  requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  reviewed_by_user_id INT UNSIGNED NULL,
+  reviewed_at DATETIME NULL,
+  review_notes VARCHAR(255) NULL,
+  PRIMARY KEY (sick_request_id),
+  UNIQUE KEY uq_sick_request_employee_day (employee_id, request_date),
+  KEY idx_sick_requests_employee (employee_id),
+  KEY idx_sick_requests_status (status),
+  CONSTRAINT fk_sick_requests_employee
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_sick_requests_reviewer
+    FOREIGN KEY (reviewed_by_user_id) REFERENCES users(user_id)
+    ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 005_create_employee_hours.sql
@@ -99,6 +124,26 @@ CREATE TABLE IF NOT EXISTS employee_transfers (
     FOREIGN KEY (to_department) REFERENCES departments(department_id)
     ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT fk_transfers_handler
+    FOREIGN KEY (handled_by_user_id) REFERENCES users(user_id)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 006b_create_hr_action_logs.sql
+CREATE TABLE IF NOT EXISTS hr_action_logs (
+  hr_action_log_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  action_type VARCHAR(60) NOT NULL,
+  employee_id INT UNSIGNED NULL,
+  handled_by_user_id INT UNSIGNED NOT NULL,
+  details VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (hr_action_log_id),
+  KEY idx_hr_action_logs_employee (employee_id),
+  KEY idx_hr_action_logs_user (handled_by_user_id),
+  KEY idx_hr_action_logs_created (created_at),
+  CONSTRAINT fk_hr_action_logs_employee
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_hr_action_logs_user
     FOREIGN KEY (handled_by_user_id) REFERENCES users(user_id)
     ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

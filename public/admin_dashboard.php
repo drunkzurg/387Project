@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Database/Database.php';
 require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
+require_once __DIR__ . '/../src/View/FrontendAssets.php';
 
 debugToolbarHandleRequest();
 
@@ -17,43 +18,88 @@ if (!$currentUser || $currentUser['role'] !== 'sys_admin') {
 
 $pdo = Database::connect();
 
+$flash = $_SESSION['admin_dashboard_flash'] ?? null;
+$error = $_SESSION['admin_dashboard_error'] ?? null;
+unset($_SESSION['admin_dashboard_flash'], $_SESSION['admin_dashboard_error']);
+
 // Handle approval/rejection actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['action'])) {
     $userId = (int)$_POST['user_id'];
-    if ($_POST['action'] === 'approve') {
-      $stmt = $pdo->prepare('UPDATE users SET pending_approval = 0 WHERE user_id = :user_id');
-      $stmt->execute(['user_id' => $userId]);
-      // Check if user needs an employee record
-      $userRow = $pdo->prepare('SELECT user_id, name, role FROM users WHERE user_id = :user_id');
-      $userRow->execute(['user_id' => $userId]);
-      $userData = $userRow->fetch();
-      if ($userData && in_array($userData['role'], ['employee', 'owner', 'hr'], true)) {
-        // Only create if not already present
-        $check = $pdo->prepare('SELECT employee_id FROM employees WHERE user_id = :user_id');
-        $check->execute(['user_id' => $userId]);
-        if (!$check->fetch()) {
-          // Assign to first department by default (can be changed by HR later)
-          $dept = $pdo->query('SELECT department_id FROM departments ORDER BY department_id ASC LIMIT 1')->fetch();
-          $departmentId = $dept ? $dept['department_id'] : null;
-          $insert = $pdo->prepare('INSERT INTO employees (user_id, name, department_id, hourly_wage, status) VALUES (:user_id, :name, :department_id, 15.00, "active")');
-          $insert->execute([
-            'user_id' => $userId,
-            'name' => $userData['name'],
-            'department_id' => $departmentId
-          ]);
+
+    try {
+      if ($_POST['action'] === 'approve') {
+        $stmt = $pdo->prepare('UPDATE users SET pending_approval = 0 WHERE user_id = :user_id');
+        $stmt->execute(['user_id' => $userId]);
+        // Check if user needs an employee record
+        $userRow = $pdo->prepare('SELECT user_id, name, role FROM users WHERE user_id = :user_id');
+        $userRow->execute(['user_id' => $userId]);
+        $userData = $userRow->fetch();
+        if ($userData && in_array($userData['role'], ['employee', 'owner', 'hr'], true)) {
+          // Only create if not already present
+          $check = $pdo->prepare('SELECT employee_id FROM employees WHERE user_id = :user_id');
+          $check->execute(['user_id' => $userId]);
+          if (!$check->fetch()) {
+            // Assign to first department by default (can be changed by HR later)
+            $dept = $pdo->query('SELECT department_id FROM departments ORDER BY department_id ASC LIMIT 1')->fetch();
+            $departmentId = $dept ? $dept['department_id'] : null;
+            $insert = $pdo->prepare('INSERT INTO employees (user_id, name, department_id, hourly_wage, status) VALUES (:user_id, :name, :department_id, 15.00, "active")');
+            $insert->execute([
+              'user_id' => $userId,
+              'name' => $userData['name'],
+              'department_id' => $departmentId
+            ]);
+          }
         }
+        $_SESSION['admin_dashboard_flash'] = 'Account approved.';
+      } elseif ($_POST['action'] === 'reject') {
+        $stmt = $pdo->prepare('DELETE FROM users WHERE user_id = :user_id AND pending_approval = 1');
+        $stmt->execute(['user_id' => $userId]);
+        $_SESSION['admin_dashboard_flash'] = 'Account request rejected.';
+      } elseif ($_POST['action'] === 'delete_existing') {
+        if ($userId === (int)$currentUser['user_id']) {
+          throw new RuntimeException('You cannot delete your own admin account.');
+        }
+
+        $stmt = $pdo->prepare('DELETE FROM users WHERE user_id = :user_id AND pending_approval = 0');
+        $stmt->execute(['user_id' => $userId]);
+        $_SESSION['admin_dashboard_flash'] = 'Existing account deleted.';
       }
-    } elseif ($_POST['action'] === 'reject') {
-      $stmt = $pdo->prepare('DELETE FROM users WHERE user_id = :user_id');
-      $stmt->execute(['user_id' => $userId]);
+    } catch (Throwable $e) {
+      $_SESSION['admin_dashboard_error'] = $e->getMessage();
     }
+
     header('Location: admin_dashboard.php');
     exit;
 }
 
 // Fetch all pending users
-$stmt = $pdo->query('SELECT user_id, name, email, role FROM users WHERE pending_approval = 1 ORDER BY user_id ASC');
+$stmt = $pdo->query('SELECT user_id, name, email, role, pending_approval FROM users WHERE pending_approval = 1 ORDER BY user_id ASC');
 $pendingUsers = $stmt->fetchAll();
+
+$existingStmt = $pdo->query('SELECT user_id, name, email, role, pending_approval FROM users WHERE pending_approval = 0 ORDER BY FIELD(role, "sys_admin", "owner", "hr", "employee"), name ASC');
+$existingUsers = $existingStmt->fetchAll();
+
+$mapUser = static function (array $user) use ($currentUser): array {
+    return [
+      'userId' => (int)$user['user_id'],
+      'name' => (string)$user['name'],
+      'email' => (string)$user['email'],
+      'role' => (string)$user['role'],
+      'pendingApproval' => (bool)$user['pending_approval'],
+      'isCurrentUser' => (int)$user['user_id'] === (int)$currentUser['user_id'],
+    ];
+};
+
+$frontendProps = [
+  'currentUser' => [
+    'name' => (string)$currentUser['name'],
+    'role' => (string)$currentUser['role'],
+  ],
+  'flash' => $flash,
+  'error' => $error,
+  'pendingUsers' => array_map($mapUser, $pendingUsers),
+  'existingUsers' => array_map($mapUser, $existingUsers),
+];
 
 ?><!doctype html>
 <html lang="en">
@@ -61,9 +107,13 @@ $pendingUsers = $stmt->fetchAll();
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Admin Dashboard - Pending Approvals</title>
+  <?php echo frontendAssetsRender(); ?>
 </head>
 <body>
   <?php echo debugToolbarRender($currentUser); ?>
+  <?php echo frontendJsonScript('admin-dashboard-props', $frontendProps); ?>
+  <div id="admin-dashboard-root" data-react-page="adminDashboard" data-props-id="admin-dashboard-props"></div>
+  <div class="ams-fallback">
   <h1>Admin Dashboard</h1>
   <h2>Pending Account Approvals</h2>
   <?php if (count($pendingUsers) === 0): ?>
@@ -94,5 +144,6 @@ $pendingUsers = $stmt->fetchAll();
   <?php endif; ?>
   <p style="margin-top: 16px;"><a href="index.php">Back to Home</a></p>
   <p><a href="logout.php">Logout</a></p>
+  </div>
 </body>
 </html>

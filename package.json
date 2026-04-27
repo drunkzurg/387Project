@@ -1,0 +1,28 @@
+{
+  "name": "arcade-management-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "clsx": "latest",
+    "lucide-react": "^1.11.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "latest",
+    "@types/node": "^25.6.0",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "^4.7.0",
+    "tailwindcss": "latest",
+    "typescript": "latest",
+    "vite": "^6.4.2"
+  }
+}

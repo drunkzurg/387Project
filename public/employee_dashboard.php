@@ -3,6 +3,7 @@ require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Database/Database.php';
 require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
 require_once __DIR__ . '/../src/Services/TicketService.php';
+require_once __DIR__ . '/../src/View/FrontendAssets.php';
 
 debugToolbarHandleRequest();
 
@@ -29,6 +30,7 @@ $employeeStmt = $pdo->prepare(
         d.name AS department_name,
         d.department_type,
         d.entrance_fee_tickets,
+        d.capacity,
         d.operating_status,
         COALESCE(reserve_account.balance, 0) AS reserve_balance,
         COALESCE(generated_account.balance, 0) AS generated_balance
@@ -45,6 +47,11 @@ $employeeStmt = $pdo->prepare(
 );
 $employeeStmt->execute(['user_id' => $user['user_id']]);
 $employee = $employeeStmt->fetch();
+if ($employee && $employee['department_id'] !== null) {
+    TicketService::syncDepartmentStaffingStatus($pdo, (int)$employee['department_id']);
+    $employeeStmt->execute(['user_id' => $user['user_id']]);
+    $employee = $employeeStmt->fetch();
+}
 
 $flash = $_SESSION['employee_dashboard_flash'] ?? null;
 $error = $_SESSION['employee_dashboard_error'] ?? null;
@@ -86,7 +93,56 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string)($_POST['action'] ?? '');
 
         switch ($action) {
+            case 'clock_in_shift':
+                if ($employee['department_id'] === null) {
+                    throw new RuntimeException('You need a department assignment before clocking in.');
+                }
+
+                $openShift = $pdo->prepare(
+                    "SELECT shift_id FROM employee_shifts
+                     WHERE employee_id = :employee_id
+                       AND entry_type = 'live'
+                       AND end_time IS NULL
+                     LIMIT 1"
+                );
+                $openShift->execute(['employee_id' => $employee['employee_id']]);
+                if ($openShift->fetch()) {
+                    throw new RuntimeException('You already have an open live shift.');
+                }
+
+                $insertShift = $pdo->prepare(
+                    "INSERT INTO employee_shifts (employee_id, start_time, end_time, entry_type)
+                     VALUES (:employee_id, NOW(), NULL, 'live')"
+                );
+                $insertShift->execute(['employee_id' => $employee['employee_id']]);
+                TicketService::syncDepartmentStaffingStatus($pdo, (int)$employee['department_id']);
+                $_SESSION['employee_dashboard_flash'] = 'Live shift started.';
+                break;
+
+            case 'clock_out_shift':
+                $closeShift = $pdo->prepare(
+                    "UPDATE employee_shifts
+                     SET end_time = NOW()
+                     WHERE employee_id = :employee_id
+                       AND entry_type = 'live'
+                       AND end_time IS NULL
+                     ORDER BY start_time DESC
+                     LIMIT 1"
+                );
+                $closeShift->execute(['employee_id' => $employee['employee_id']]);
+                if ($closeShift->rowCount() === 0) {
+                    throw new RuntimeException('No open live shift found.');
+                }
+
+                TicketService::syncDepartmentStaffingStatus(
+                    $pdo,
+                    $employee['department_id'] !== null ? (int)$employee['department_id'] : null
+                );
+                $_SESSION['employee_dashboard_flash'] = 'Live shift closed.';
+                break;
+
             case 'add_shift':
+            case 'add_manual_shift':
                 $startValue = trim((string)($_POST['start_time'] ?? ''));
                 $endValue = trim((string)($_POST['end_time'] ?? ''));
 
@@ -103,8 +159,8 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $insertShift = $pdo->prepare(
-                    'INSERT INTO employee_shifts (employee_id, start_time, end_time)
-                     VALUES (:employee_id, :start_time, :end_time)'
+                    "INSERT INTO employee_shifts (employee_id, start_time, end_time, entry_type)
+                     VALUES (:employee_id, :start_time, :end_time, 'manual')"
                 );
                 $insertShift->execute([
                     'employee_id' => $employee['employee_id'],
@@ -112,6 +168,25 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     'end_time' => $endTime->format('Y-m-d H:i:s'),
                 ]);
                 $_SESSION['employee_dashboard_flash'] = 'Shift added successfully.';
+                break;
+
+            case 'request_sick_day':
+                $requestDateValue = trim((string)($_POST['request_date'] ?? ''));
+                $requestDate = DateTimeImmutable::createFromFormat('Y-m-d', $requestDateValue);
+                if (!$requestDate) {
+                    throw new RuntimeException('Please choose a valid sick day.');
+                }
+
+                $insertRequest = $pdo->prepare(
+                    "INSERT INTO employee_sick_requests (employee_id, request_date, notes)
+                     VALUES (:employee_id, :request_date, :notes)"
+                );
+                $insertRequest->execute([
+                    'employee_id' => $employee['employee_id'],
+                    'request_date' => $requestDate->format('Y-m-d'),
+                    'notes' => trim((string)($_POST['notes'] ?? '')) ?: null,
+                ]);
+                $_SESSION['employee_dashboard_flash'] = 'Sick day request sent to HR.';
                 break;
 
             case 'open_session':
@@ -147,6 +222,42 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     (string)($_POST['notes'] ?? '')
                 );
                 $_SESSION['employee_dashboard_flash'] = 'Attendee session closed.';
+                break;
+
+            case 'create_item':
+                if ($employee['department_type'] !== 'gift_shop' || $employee['department_id'] === null) {
+                    throw new RuntimeException('Only gift shop staff can add catalog items.');
+                }
+
+                TicketService::createGiftShopItem(
+                    $pdo,
+                    (string)($_POST['name'] ?? ''),
+                    (int)($_POST['ticket_price'] ?? 0),
+                    (float)($_POST['cost_price'] ?? 0),
+                    (int)($_POST['stock'] ?? 0),
+                    (string)($_POST['category'] ?? ''),
+                    (string)($_POST['description'] ?? '')
+                );
+                $_SESSION['employee_dashboard_flash'] = 'Gift shop item added.';
+                break;
+
+            case 'update_item':
+                if ($employee['department_type'] !== 'gift_shop' || $employee['department_id'] === null) {
+                    throw new RuntimeException('Only gift shop staff can update catalog items.');
+                }
+
+                TicketService::updateGiftShopItem(
+                    $pdo,
+                    (int)($_POST['item_id'] ?? 0),
+                    (string)($_POST['name'] ?? ''),
+                    (int)($_POST['ticket_price'] ?? 0),
+                    (float)($_POST['cost_price'] ?? 0),
+                    (int)($_POST['stock'] ?? 0),
+                    (string)($_POST['status'] ?? 'active'),
+                    (string)($_POST['category'] ?? ''),
+                    (string)($_POST['description'] ?? '')
+                );
+                $_SESSION['employee_dashboard_flash'] = 'Gift shop item updated.';
                 break;
 
             case 'redeem_item':
@@ -220,8 +331,13 @@ $activeSessions = [];
 $recentSessions = [];
 $walletSources = [];
 $giftShopItems = [];
+$redeemableGiftShopItems = [];
+$giftShopBudgetAvailable = 0;
 $recentRedemptions = [];
 $claimCandidates = [];
+$openLiveShift = null;
+$sickRequests = [];
+$approvedSickDaysThisWeek = 0;
 
 if ($employee) {
     $durationExpr = 'CASE WHEN end_time > start_time THEN TIMESTAMPDIFF(MINUTE, start_time, end_time) ELSE 0 END';
@@ -246,13 +362,53 @@ if ($employee) {
     }
 
     $shiftStmt = $pdo->prepare(
-        "SELECT shift_id, start_time, end_time, {$durationExpr} AS duration_minutes
+        "SELECT shift_id, start_time, end_time, entry_type, {$durationExpr} AS duration_minutes
          FROM employee_shifts
          WHERE employee_id = :employee_id
          ORDER BY start_time DESC"
     );
     $shiftStmt->execute(['employee_id' => $employee['employee_id']]);
     $shifts = $shiftStmt->fetchAll();
+
+    $openShiftStmt = $pdo->prepare(
+        "SELECT shift_id, start_time
+         FROM employee_shifts
+         WHERE employee_id = :employee_id
+           AND entry_type = 'live'
+           AND end_time IS NULL
+         ORDER BY start_time DESC
+         LIMIT 1"
+    );
+    $openShiftStmt->execute(['employee_id' => $employee['employee_id']]);
+    $openLiveShift = $openShiftStmt->fetch() ?: null;
+
+    $weekStart = new DateTimeImmutable('monday this week');
+    $approvedSickStmt = $pdo->prepare(
+        "SELECT COUNT(*)
+         FROM employee_sick_requests
+         WHERE employee_id = :employee_id
+           AND status = 'approved'
+           AND request_date >= :week_start
+           AND request_date < :week_end"
+    );
+    $approvedSickStmt->execute([
+        'employee_id' => $employee['employee_id'],
+        'week_start' => $weekStart->format('Y-m-d'),
+        'week_end' => $weekStart->modify('+7 days')->format('Y-m-d'),
+    ]);
+    $approvedSickDaysThisWeek = (int)$approvedSickStmt->fetchColumn();
+    $summary['week_minutes'] += $approvedSickDaysThisWeek * 8 * 60;
+    $summary['total_minutes'] += $approvedSickDaysThisWeek * 8 * 60;
+
+    $sickStmt = $pdo->prepare(
+        "SELECT sick_request_id, request_date, status, notes, requested_at, reviewed_at, review_notes
+         FROM employee_sick_requests
+         WHERE employee_id = :employee_id
+         ORDER BY request_date DESC
+         LIMIT 12"
+    );
+    $sickStmt->execute(['employee_id' => $employee['employee_id']]);
+    $sickRequests = $sickStmt->fetchAll();
 
     $members = $pdo->query(
         "SELECT
@@ -318,12 +474,17 @@ if ($employee) {
     }
 
     if ($employee['department_type'] === 'gift_shop') {
+        $giftShopBudgetAvailable = (int)($employee['reserve_balance'] ?? 0);
+
         $giftShopItems = $pdo->query(
-            'SELECT gift_shop_item_id, name, ticket_price, stock, status, category
+            'SELECT gift_shop_item_id, name, ticket_price, cost_price, stock, status, category, description
              FROM gift_shop_items
-             WHERE status = "active"
              ORDER BY ticket_price ASC, name ASC'
         )->fetchAll();
+        $redeemableGiftShopItems = array_values(array_filter(
+            $giftShopItems,
+            static fn(array $item): bool => $item['status'] === 'active'
+        ));
 
         $memberWallets = $pdo->query(
             "SELECT
@@ -394,15 +555,167 @@ if ($employee) {
         )->fetchAll();
     }
 }
+
+$mapShift = static function (array $shift) use ($formatDateTime, $formatHours): array {
+    return [
+        'shiftId' => (int)$shift['shift_id'],
+        'startTime' => (string)$shift['start_time'],
+        'endTime' => $shift['end_time'] !== null ? (string)$shift['end_time'] : null,
+        'entryType' => (string)($shift['entry_type'] ?? 'manual'),
+        'durationMinutes' => (int)$shift['duration_minutes'],
+        'formattedStart' => $formatDateTime((string)$shift['start_time']),
+        'formattedEnd' => $shift['end_time'] !== null ? $formatDateTime((string)$shift['end_time']) : 'Open',
+        'formattedHours' => $formatHours((int)$shift['duration_minutes']),
+    ];
+};
+
+$frontendProps = [
+    'currentUser' => [
+        'name' => (string)$user['name'],
+        'role' => (string)$user['role'],
+    ],
+    'flash' => $flash,
+    'error' => $error,
+    'employee' => $employee ? [
+        'employeeId' => (int)$employee['employee_id'],
+        'name' => (string)$employee['name'],
+        'status' => (string)$employee['status'],
+        'hourlyWage' => (float)$employee['hourly_wage'],
+        'departmentId' => $employee['department_id'] !== null ? (int)$employee['department_id'] : null,
+        'departmentName' => (string)($employee['department_name'] ?? 'Unassigned'),
+        'departmentType' => (string)($employee['department_type'] ?? ''),
+        'departmentLabel' => $departmentLabel($employee['department_type'] ?? null),
+        'entranceFeeTickets' => (int)($employee['entrance_fee_tickets'] ?? 0),
+        'capacity' => (int)($employee['capacity'] ?? 0),
+        'operatingStatus' => (string)($employee['operating_status'] ?? ''),
+        'reserveBalance' => (int)($employee['reserve_balance'] ?? 0),
+        'generatedBalance' => (int)($employee['generated_balance'] ?? 0),
+    ] : null,
+    'summary' => [
+        'todayHours' => round($summary['today_minutes'] / 60, 2),
+        'weekHours' => round($summary['week_minutes'] / 60, 2),
+        'approvedSickDaysThisWeek' => $approvedSickDaysThisWeek,
+        'weekTargetHours' => 40 + ($approvedSickDaysThisWeek * 8),
+        'totalHours' => round($summary['total_minutes'] / 60, 2),
+    ],
+    'openLiveShift' => $openLiveShift ? [
+        'shiftId' => (int)$openLiveShift['shift_id'],
+        'startTime' => (string)$openLiveShift['start_time'],
+        'formattedStart' => $formatDateTime((string)$openLiveShift['start_time']),
+    ] : null,
+    'shifts' => array_map($mapShift, $shifts),
+    'sickRequests' => array_map(
+        static fn(array $request): array => [
+            'sickRequestId' => (int)$request['sick_request_id'],
+            'requestDate' => (string)$request['request_date'],
+            'status' => (string)$request['status'],
+            'notes' => (string)($request['notes'] ?? ''),
+            'requestedAt' => (string)$request['requested_at'],
+            'reviewedAt' => (string)($request['reviewed_at'] ?? ''),
+            'reviewNotes' => (string)($request['review_notes'] ?? ''),
+        ],
+        $sickRequests
+    ),
+    'members' => array_map(
+        static fn(array $member): array => [
+            'attendeeId' => (int)$member['attendee_id'],
+            'name' => (string)$member['name'],
+            'membershipCode' => (string)($member['membership_code'] ?? ''),
+            'walletBalance' => (int)$member['wallet_balance'],
+        ],
+        $members
+    ),
+    'activeSessions' => array_map(
+        static fn(array $session): array => [
+            'sessionId' => (int)$session['session_id'],
+            'displayName' => (string)$session['display_name'],
+            'admissionMode' => (string)$session['admission_mode'],
+            'entranceFeeTickets' => (int)$session['entrance_fee_tickets'],
+            'openedAt' => (string)$session['opened_at'],
+            'attendeeName' => (string)($session['attendee_name'] ?? 'Walk-In'),
+            'sessionWalletBalance' => (int)$session['session_wallet_balance'],
+        ],
+        $activeSessions
+    ),
+    'recentSessions' => array_map(
+        static fn(array $session): array => [
+            'sessionId' => (int)$session['session_id'],
+            'displayName' => (string)$session['display_name'],
+            'admissionMode' => (string)$session['admission_mode'],
+            'payoutTickets' => (int)($session['payout_tickets'] ?? 0),
+            'closedAt' => (string)$session['closed_at'],
+            'attendeeName' => (string)($session['attendee_name'] ?? 'Walk-In'),
+            'sessionWalletBalance' => (int)$session['session_wallet_balance'],
+        ],
+        $recentSessions
+    ),
+    'giftShopBudgetAvailable' => $giftShopBudgetAvailable,
+    'giftShopItems' => array_map(
+        static fn(array $item): array => [
+            'itemId' => (int)$item['gift_shop_item_id'],
+            'name' => (string)$item['name'],
+            'ticketPrice' => (int)$item['ticket_price'],
+            'costPrice' => (float)($item['cost_price'] ?? 0),
+            'stock' => (int)$item['stock'],
+            'status' => (string)$item['status'],
+            'category' => (string)($item['category'] ?? ''),
+            'description' => (string)($item['description'] ?? ''),
+        ],
+        $giftShopItems
+    ),
+    'redeemableGiftShopItems' => array_map(
+        static fn(array $item): array => [
+            'itemId' => (int)$item['gift_shop_item_id'],
+            'name' => (string)$item['name'],
+            'ticketPrice' => (int)$item['ticket_price'],
+            'stock' => (int)$item['stock'],
+        ],
+        $redeemableGiftShopItems
+    ),
+    'walletSources' => array_map(
+        static fn(array $source): array => [
+            'sourceToken' => (string)$source['source_token'],
+            'sourceLabel' => (string)$source['source_label'],
+            'balance' => (int)$source['balance'],
+        ],
+        $walletSources
+    ),
+    'recentRedemptions' => array_map(
+        static fn(array $redemption): array => [
+            'redemptionId' => (int)$redemption['redemption_id'],
+            'itemName' => (string)$redemption['item_name'],
+            'quantity' => (int)$redemption['quantity'],
+            'totalTickets' => (int)$redemption['total_tickets'],
+            'attendeeName' => (string)($redemption['attendee_name'] ?? ''),
+            'sessionName' => (string)($redemption['session_name'] ?? ''),
+            'redeemedAt' => (string)$redemption['redeemed_at'],
+        ],
+        $recentRedemptions
+    ),
+    'claimCandidates' => array_map(
+        static fn(array $candidate): array => [
+            'sessionId' => (int)$candidate['session_id'],
+            'displayName' => (string)$candidate['display_name'],
+            'departmentName' => (string)$candidate['department_name'],
+            'closedAt' => (string)$candidate['closed_at'],
+            'walletBalance' => (int)$candidate['wallet_balance'],
+        ],
+        $claimCandidates
+    ),
+];
 ?><!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Employee Dashboard</title>
+  <?php echo frontendAssetsRender(); ?>
 </head>
 <body>
   <?php echo debugToolbarRender($user); ?>
+  <?php echo frontendJsonScript('employee-dashboard-props', $frontendProps); ?>
+  <div id="employee-dashboard-root" data-react-page="employeeDashboard" data-props-id="employee-dashboard-props"></div>
+  <div class="ams-fallback">
   <h1>Employee Dashboard</h1>
 
   <?php if ($flash !== null): ?>
@@ -428,6 +741,9 @@ if ($employee) {
       <ul>
         <li>Department Status: <strong><?php echo $escape($statusLabel((string)$employee['operating_status'])); ?></strong></li>
         <li>Entrance Fee: <strong><?php echo number_format((int)$employee['entrance_fee_tickets']); ?></strong> tickets</li>
+        <?php if ($employee['department_type'] === 'play_area'): ?>
+          <li>Capacity: <strong><?php echo number_format((int)$employee['capacity']); ?></strong> attendees</li>
+        <?php endif; ?>
         <li>Department Reserve: <strong><?php echo number_format((int)$employee['reserve_balance']); ?></strong> tickets</li>
         <li>Department Generated: <strong><?php echo number_format((int)$employee['generated_balance']); ?></strong> tickets</li>
       </ul>
@@ -479,7 +795,10 @@ if ($employee) {
 
     <?php if ($employee['department_type'] === 'play_area' && $employee['department_id'] !== null): ?>
       <h2>Open Attendee Session</h2>
-      <p>Active attendees are any sessions that have been opened but not yet closed with a payout.</p>
+      <p>
+        Active attendees are any sessions that have been opened but not yet closed with a payout.
+        Current attendance: <strong><?php echo number_format(count($activeSessions)); ?> / <?php echo number_format((int)$employee['capacity']); ?></strong>.
+      </p>
       <form method="post" action="">
         <input type="hidden" name="action" value="open_session">
         <label>
@@ -588,13 +907,120 @@ if ($employee) {
     <?php endif; ?>
 
     <?php if ($employee['department_type'] === 'gift_shop' && $employee['department_id'] !== null): ?>
+      <h2>Gift Shop Budget</h2>
+      <p>
+        Gift shop budget allocated by owner:
+        <strong><?php echo number_format($giftShopBudgetAvailable); ?></strong> tickets.
+      </p>
+
+      <h2>Gift Shop Catalog</h2>
+      <form method="post" action="">
+        <input type="hidden" name="action" value="create_item">
+        <label>
+          Item Name:
+          <input type="text" name="name" required>
+        </label>
+        <br>
+        <label>
+          Ticket Price (10-1000):
+          <input type="number" name="ticket_price" min="10" max="1000" step="1" required>
+        </label>
+        <br>
+        <label>
+          Cost Price:
+          <input type="number" name="cost_price" min="0" step="0.01" value="0.00" required>
+        </label>
+        <br>
+        <label>
+          Stock:
+          <input type="number" name="stock" min="0" step="1" value="0" required>
+        </label>
+        <br>
+        <label>
+          Category:
+          <input type="text" name="category">
+        </label>
+        <br>
+        <label>
+          Description:
+          <input type="text" name="description" maxlength="255">
+        </label>
+        <br>
+        <button type="submit">Add Gift Shop Item</button>
+      </form>
+
+      <table border="1" cellpadding="6" style="border-collapse: collapse; width: 100%; margin-top: 12px;">
+        <tr>
+          <th>Name</th>
+          <th>Ticket Price</th>
+          <th>Stock</th>
+          <th>Status</th>
+          <th>Category</th>
+          <th>Update</th>
+        </tr>
+        <?php foreach ($giftShopItems as $item): ?>
+          <tr>
+            <td><?php echo $escape((string)$item['name']); ?></td>
+            <td><?php echo number_format((int)$item['ticket_price']); ?></td>
+            <td><?php echo number_format((int)$item['stock']); ?></td>
+            <td><?php echo $escape((string)$item['status']); ?></td>
+            <td><?php echo $escape((string)($item['category'] ?? '')); ?></td>
+            <td>
+              <form method="post" action="">
+                <input type="hidden" name="action" value="update_item">
+                <input type="hidden" name="item_id" value="<?php echo (int)$item['gift_shop_item_id']; ?>">
+                <label>
+                  <span>Name</span><br>
+                  <input type="text" name="name" value="<?php echo $escape((string)$item['name']); ?>" required>
+                </label>
+                <br>
+                <label>
+                  <span>Ticket Price</span><br>
+                  <input type="number" name="ticket_price" min="10" max="1000" value="<?php echo (int)$item['ticket_price']; ?>" required>
+                </label>
+                <br>
+                <label>
+                  <span>Cost Price</span><br>
+                  <input type="number" name="cost_price" min="0" step="0.01" value="<?php echo $escape(number_format((float)$item['cost_price'], 2, '.', '')); ?>" required>
+                </label>
+                <br>
+                <label>
+                  <span>Stock</span><br>
+                  <input type="number" name="stock" min="0" value="<?php echo (int)$item['stock']; ?>" required>
+                </label>
+                <br>
+                <label>
+                  <span>Status</span><br>
+                  <select name="status" required>
+                    <option value="active" <?php echo $item['status'] === 'active' ? 'selected' : ''; ?>>Active</option>
+                    <option value="inactive" <?php echo $item['status'] === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                  </select>
+                </label>
+                <br>
+                <label>
+                  <span>Category</span><br>
+                  <input type="text" name="category" value="<?php echo $escape((string)($item['category'] ?? '')); ?>">
+                </label>
+                <br>
+                <label>
+                  <span>Description</span><br>
+                  <input type="text" name="description" maxlength="255" value="<?php echo $escape((string)($item['description'] ?? '')); ?>">
+                </label>
+                <br>
+                <button type="submit">Save Item</button>
+              </form>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+      </table>
+
       <h2>Gift Shop Redemptions</h2>
       <form method="post" action="">
         <input type="hidden" name="action" value="redeem_item">
         <label>
           Item:
           <select name="item_id" required>
-            <?php foreach ($giftShopItems as $item): ?>
+            <?php foreach ($redeemableGiftShopItems as $item): ?>
               <option value="<?php echo (int)$item['gift_shop_item_id']; ?>">
                 <?php echo $escape((string)$item['name']); ?> -
                 <?php echo number_format((int)$item['ticket_price']); ?> tickets
@@ -707,5 +1133,6 @@ if ($employee) {
 
   <p><a href="index.php">Back to Home</a></p>
   <p><a href="logout.php">Logout</a></p>
+  </div>
 </body>
 </html>

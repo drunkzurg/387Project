@@ -16,6 +16,7 @@ Table departments {
   name varchar
   department_type varchar     // play_area, gift_shop, customer_support
   entrance_fee_tickets integer
+  capacity integer
   operating_status varchar    // active, out_of_order, inactive
   description varchar
   created_at datetime

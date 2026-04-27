@@ -9,14 +9,51 @@ final class TicketService
 
     public static function ensureInfrastructure(PDO $pdo): void
     {
+        self::ensureEmployeeInfrastructure($pdo);
         self::ensureSystemAccount($pdo, 'gift_shop_budget');
         self::ensureSystemAccount($pdo, 'gift_shop_revenue');
         self::ensureSystemAccount($pdo, 'gift_shop_investment');
 
         $departments = $pdo->query('SELECT department_id FROM departments')->fetchAll();
         foreach ($departments as $department) {
-            self::ensureDepartmentAccounts($pdo, (int)$department['department_id']);
+            $departmentId = (int)$department['department_id'];
+            self::ensureDepartmentAccounts($pdo, $departmentId);
+            self::syncDepartmentStaffingStatus($pdo, $departmentId);
         }
+    }
+
+    public static function ensureEmployeeInfrastructure(PDO $pdo): void
+    {
+        $pdo->exec('ALTER TABLE employee_shifts MODIFY end_time DATETIME NULL');
+
+        $entryTypeColumn = $pdo->query("SHOW COLUMNS FROM employee_shifts LIKE 'entry_type'")->fetch();
+        if (!$entryTypeColumn) {
+            $pdo->exec("ALTER TABLE employee_shifts ADD entry_type ENUM('live','manual') NOT NULL DEFAULT 'manual' AFTER end_time");
+        }
+
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS employee_sick_requests (
+                sick_request_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                employee_id INT UNSIGNED NOT NULL,
+                request_date DATE NOT NULL,
+                status ENUM('waiting','approved','denied') NOT NULL DEFAULT 'waiting',
+                notes VARCHAR(255) NULL,
+                requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                reviewed_by_user_id INT UNSIGNED NULL,
+                reviewed_at DATETIME NULL,
+                review_notes VARCHAR(255) NULL,
+                PRIMARY KEY (sick_request_id),
+                UNIQUE KEY uq_sick_request_employee_day (employee_id, request_date),
+                KEY idx_sick_requests_employee (employee_id),
+                KEY idx_sick_requests_status (status),
+                CONSTRAINT fk_sick_requests_employee
+                    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+                    ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT fk_sick_requests_reviewer
+                    FOREIGN KEY (reviewed_by_user_id) REFERENCES users(user_id)
+                    ON DELETE SET NULL ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
     }
 
     public static function createDepartment(
@@ -24,24 +61,26 @@ final class TicketService
         string $name,
         string $departmentType,
         int $entranceFeeTickets,
+        int $capacity,
         string $operatingStatus,
         string $description
     ): int {
         $name = trim($name);
         $description = trim($description);
-        self::assertDepartmentInput($name, $departmentType, $entranceFeeTickets, $operatingStatus);
+        self::assertDepartmentInput($name, $departmentType, $entranceFeeTickets, $capacity, $operatingStatus);
 
         $pdo->beginTransaction();
 
         try {
             $stmt = $pdo->prepare(
-                'INSERT INTO departments (name, department_type, entrance_fee_tickets, operating_status, description)
-                 VALUES (:name, :department_type, :entrance_fee_tickets, :operating_status, :description)'
+                'INSERT INTO departments (name, department_type, entrance_fee_tickets, capacity, operating_status, description)
+                 VALUES (:name, :department_type, :entrance_fee_tickets, :capacity, :operating_status, :description)'
             );
             $stmt->execute([
                 'name' => $name,
                 'department_type' => $departmentType,
                 'entrance_fee_tickets' => self::normalizeEntranceFee($departmentType, $entranceFeeTickets),
+                'capacity' => self::normalizeCapacity($departmentType, $capacity),
                 'operating_status' => $operatingStatus,
                 'description' => $description !== '' ? $description : null,
             ]);
@@ -68,18 +107,20 @@ final class TicketService
         string $name,
         string $departmentType,
         int $entranceFeeTickets,
+        int $capacity,
         string $operatingStatus,
         string $description
     ): void {
         $name = trim($name);
         $description = trim($description);
-        self::assertDepartmentInput($name, $departmentType, $entranceFeeTickets, $operatingStatus);
+        self::assertDepartmentInput($name, $departmentType, $entranceFeeTickets, $capacity, $operatingStatus);
 
         $stmt = $pdo->prepare(
             'UPDATE departments
              SET name = :name,
                  department_type = :department_type,
                  entrance_fee_tickets = :entrance_fee_tickets,
+                 capacity = :capacity,
                  operating_status = :operating_status,
                  description = :description
              WHERE department_id = :department_id'
@@ -89,6 +130,7 @@ final class TicketService
             'name' => $name,
             'department_type' => $departmentType,
             'entrance_fee_tickets' => self::normalizeEntranceFee($departmentType, $entranceFeeTickets),
+            'capacity' => self::normalizeCapacity($departmentType, $capacity),
             'operating_status' => $operatingStatus,
             'description' => $description !== '' ? $description : null,
         ]);
@@ -232,8 +274,8 @@ final class TicketService
 
     public static function allocateDepartmentReserve(PDO $pdo, int $departmentId, int $amount, ?int $createdByUserId = null): void
     {
-        if ($amount <= 0) {
-            throw new RuntimeException('Allocation tickets must be greater than zero.');
+        if ($amount === 0) {
+            throw new RuntimeException('Budget adjustments cannot be zero.');
         }
 
         $pdo->beginTransaction();
@@ -241,15 +283,27 @@ final class TicketService
         try {
             $budgetAccount = self::ensureSystemAccount($pdo, 'gift_shop_budget');
             $reserveAccount = self::ensureAccount($pdo, 'department_reserve', $departmentId);
+            $moveAmount = abs($amount);
 
-            self::postTransaction(
-                $pdo,
-                'owner_allocation',
-                $amount,
-                (int)$budgetAccount['ticket_account_id'],
-                (int)$reserveAccount['ticket_account_id'],
-                ['department_id' => $departmentId, 'created_by_user_id' => $createdByUserId]
-            );
+            if ($amount > 0) {
+                self::postTransaction(
+                    $pdo,
+                    'owner_allocation',
+                    $moveAmount,
+                    (int)$budgetAccount['ticket_account_id'],
+                    (int)$reserveAccount['ticket_account_id'],
+                    ['department_id' => $departmentId, 'created_by_user_id' => $createdByUserId]
+                );
+            } else {
+                self::postTransaction(
+                    $pdo,
+                    'owner_allocation',
+                    $moveAmount,
+                    (int)$reserveAccount['ticket_account_id'],
+                    (int)$budgetAccount['ticket_account_id'],
+                    ['department_id' => $departmentId, 'created_by_user_id' => $createdByUserId]
+                );
+            }
 
             self::adjustDepartmentStatus($pdo, $departmentId);
             $pdo->commit();
@@ -328,6 +382,11 @@ final class TicketService
         $pdo->beginTransaction();
 
         try {
+            $activeSessionCount = self::countActiveSessions($pdo, $departmentId);
+            if ((int)$department['capacity'] > 0 && $activeSessionCount >= (int)$department['capacity']) {
+                throw new RuntimeException('This department is at capacity. Please place new guests on the waitlist before opening another session.');
+            }
+
             $stmt = $pdo->prepare(
                 'INSERT INTO attendee_sessions (attendee_id, department_id, employee_id, display_name, admission_mode, entrance_fee_tickets, notes)
                  VALUES (:attendee_id, :department_id, :employee_id, :display_name, :admission_mode, :entrance_fee_tickets, :notes)'
@@ -344,7 +403,7 @@ final class TicketService
 
             $sessionId = (int)$pdo->lastInsertId();
             self::ensureAccount($pdo, 'session_wallet', null, null, $sessionId);
-            $generatedAccount = self::ensureAccount($pdo, 'department_generated', $departmentId);
+            $budgetAccount = self::ensureSystemAccount($pdo, 'gift_shop_budget');
 
             if ((int)$department['entrance_fee_tickets'] > 0) {
                 $transactionType = $admissionMode === 'manual_override' ? 'manual_override' : 'department_admission';
@@ -359,7 +418,7 @@ final class TicketService
                     $transactionType,
                     (int)$department['entrance_fee_tickets'],
                     $sourceAccountId,
-                    (int)$generatedAccount['ticket_account_id'],
+                    (int)$budgetAccount['ticket_account_id'],
                     [
                         'department_id' => $departmentId,
                         'attendee_id' => $admissionMode === 'member_wallet' ? $attendeeId : null,
@@ -740,6 +799,62 @@ final class TicketService
         ]);
     }
 
+    public static function syncDepartmentStaffingStatus(PDO $pdo, ?int $departmentId): void
+    {
+        if ($departmentId === null || $departmentId <= 0) {
+            return;
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT department_type, operating_status
+             FROM departments
+             WHERE department_id = :department_id
+             LIMIT 1'
+        );
+        $stmt->execute(['department_id' => $departmentId]);
+        $department = $stmt->fetch();
+
+        if (!$department || $department['operating_status'] === 'inactive') {
+            return;
+        }
+
+        $staffedStmt = $pdo->prepare(
+            "SELECT COUNT(*)
+             FROM employee_shifts s
+             JOIN employees e ON e.employee_id = s.employee_id
+             WHERE e.department_id = :department_id
+               AND e.status <> 'terminated'
+               AND s.entry_type = 'live'
+               AND s.end_time IS NULL"
+        );
+        $staffedStmt->execute(['department_id' => $departmentId]);
+        $hasClockedInEmployee = (int)$staffedStmt->fetchColumn() > 0;
+
+        if (!$hasClockedInEmployee) {
+            $update = $pdo->prepare(
+                "UPDATE departments
+                 SET operating_status = 'out_of_order'
+                 WHERE department_id = :department_id
+                   AND operating_status <> 'inactive'"
+            );
+            $update->execute(['department_id' => $departmentId]);
+            return;
+        }
+
+        if ($department['department_type'] === 'play_area') {
+            self::adjustDepartmentStatus($pdo, $departmentId);
+            return;
+        }
+
+        $update = $pdo->prepare(
+            "UPDATE departments
+             SET operating_status = 'active'
+             WHERE department_id = :department_id
+               AND operating_status <> 'inactive'"
+        );
+        $update->execute(['department_id' => $departmentId]);
+    }
+
     public static function postTransaction(
         PDO $pdo,
         string $transactionType,
@@ -829,6 +944,7 @@ final class TicketService
         string $name,
         string $departmentType,
         int $entranceFeeTickets,
+        int $capacity,
         string $operatingStatus
     ): void {
         if ($name === '') {
@@ -843,6 +959,9 @@ final class TicketService
         if ($departmentType === 'play_area' && ($entranceFeeTickets < 10 || $entranceFeeTickets > 100)) {
             throw new RuntimeException('Play-area entrance fees must stay between 10 and 100 tickets.');
         }
+        if ($departmentType === 'play_area' && $capacity < 1) {
+            throw new RuntimeException('Play-area departments must define a capacity greater than zero.');
+        }
         if ($departmentType !== 'play_area' && $entranceFeeTickets < 0) {
             throw new RuntimeException('Non-play-area entrance fees cannot be negative.');
         }
@@ -853,10 +972,15 @@ final class TicketService
         return $departmentType === 'play_area' ? $entranceFeeTickets : 0;
     }
 
+    private static function normalizeCapacity(string $departmentType, int $capacity): int
+    {
+        return $departmentType === 'play_area' ? $capacity : 0;
+    }
+
     private static function fetchDepartment(PDO $pdo, int $departmentId): ?array
     {
         $stmt = $pdo->prepare(
-            'SELECT department_id, department_type, entrance_fee_tickets, operating_status
+            'SELECT department_id, department_type, entrance_fee_tickets, capacity, operating_status
              FROM departments
              WHERE department_id = :department_id
              LIMIT 1'
@@ -865,6 +989,19 @@ final class TicketService
         $department = $stmt->fetch();
 
         return $department ?: null;
+    }
+
+    private static function countActiveSessions(PDO $pdo, int $departmentId): int
+    {
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*)
+             FROM attendee_sessions
+             WHERE department_id = :department_id
+               AND closed_at IS NULL'
+        );
+        $stmt->execute(['department_id' => $departmentId]);
+
+        return (int)$stmt->fetchColumn();
     }
 
     private static function fetchSession(PDO $pdo, int $sessionId): ?array
