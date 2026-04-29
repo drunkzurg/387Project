@@ -143,13 +143,13 @@ SET @casey_attendee := (SELECT attendee_id FROM attendees WHERE membership_code 
 SET @jordan_attendee := (SELECT attendee_id FROM attendees WHERE membership_code = 'MEM-1003');
 SET @morgan_attendee := (SELECT attendee_id FROM attendees WHERE membership_code = 'MEM-1004');
 
--- Gift shop items.
+-- Gift shop items (cost_price = tickets per unit for stocking the catalog).
 INSERT INTO gift_shop_items (name, ticket_price, cost_price, stock, status, category, description)
 VALUES
-  ('Candy Bar', 10, 0.75, 250, 'active', 'snacks', 'Low-cost snack for quick redemptions.'),
-  ('Sticker Pack', 20, 1.50, 120, 'active', 'accessories', 'Popular low-ticket item for walk-ins.'),
+  ('Candy Bar', 10, 1.00, 250, 'active', 'snacks', 'Low-cost snack for quick redemptions.'),
+  ('Sticker Pack', 20, 2.00, 120, 'active', 'accessories', 'Popular low-ticket item for walk-ins.'),
   ('Arcade Tumbler', 80, 8.00, 25, 'active', 'merch', 'Reusable tumbler used in redemptions.'),
-  ('Mystery Plush', 250, 11.50, 18, 'active', 'plush', 'Medium-tier redemption item.'),
+  ('Mystery Plush', 250, 12.00, 18, 'active', 'plush', 'Medium-tier redemption item.'),
   ('LED Sword', 400, 17.00, 12, 'active', 'toys', 'Bright toy for Prize Tower winners.'),
   ('VIP Party Voucher', 1000, 125.00, 4, 'active', 'events', 'Highest-tier demo item.'),
   ('Retired Token Mug', 120, 9.00, 0, 'inactive', 'merch', 'Inactive item for catalog management demo.');
@@ -188,28 +188,29 @@ SET @session_pinball_active := (SELECT session_id FROM attendee_sessions WHERE d
 -- Ticket accounts.
 INSERT INTO ticket_accounts (account_code, account_kind, department_id, attendee_id, attendee_session_id, balance)
 VALUES
-  ('gift_shop_budget', 'gift_shop_budget', NULL, NULL, NULL, 1405),
-  ('gift_shop_revenue', 'gift_shop_revenue', NULL, NULL, NULL, 760),
+  ('gift_shop_budget', 'gift_shop_budget', NULL, NULL, NULL, 295),
+  ('gift_shop_revenue', 'gift_shop_revenue', NULL, NULL, NULL, 520),
   ('gift_shop_investment', 'gift_shop_investment', NULL, NULL, NULL, 2200),
-  (CONCAT('department_reserve:', @retro_department), 'department_reserve', @retro_department, NULL, NULL, 310),
+  ('gift_shop_inventory_spend', 'gift_shop_inventory_spend', NULL, NULL, NULL, 1610),
+  (CONCAT('department_reserve:', @retro_department), 'department_reserve', @retro_department, NULL, NULL, 0),
   (CONCAT('department_generated:', @retro_department), 'department_generated', @retro_department, NULL, NULL, 0),
-  (CONCAT('department_reserve:', @vr_department), 'department_reserve', @vr_department, NULL, NULL, 220),
+  (CONCAT('department_reserve:', @vr_department), 'department_reserve', @vr_department, NULL, NULL, 0),
   (CONCAT('department_generated:', @vr_department), 'department_generated', @vr_department, NULL, NULL, 0),
   (CONCAT('department_reserve:', @claw_department), 'department_reserve', @claw_department, NULL, NULL, 0),
   (CONCAT('department_generated:', @claw_department), 'department_generated', @claw_department, NULL, NULL, 0),
-  (CONCAT('department_reserve:', @laser_department), 'department_reserve', @laser_department, NULL, NULL, 260),
+  (CONCAT('department_reserve:', @laser_department), 'department_reserve', @laser_department, NULL, NULL, 0),
   (CONCAT('department_generated:', @laser_department), 'department_generated', @laser_department, NULL, NULL, 0),
-  (CONCAT('department_reserve:', @pinball_department), 'department_reserve', @pinball_department, NULL, NULL, 185),
+  (CONCAT('department_reserve:', @pinball_department), 'department_reserve', @pinball_department, NULL, NULL, 0),
   (CONCAT('department_generated:', @pinball_department), 'department_generated', @pinball_department, NULL, NULL, 0),
-  (CONCAT('department_reserve:', @racing_department), 'department_reserve', @racing_department, NULL, NULL, 205),
+  (CONCAT('department_reserve:', @racing_department), 'department_reserve', @racing_department, NULL, NULL, 0),
   (CONCAT('department_generated:', @racing_department), 'department_generated', @racing_department, NULL, NULL, 0),
-  (CONCAT('department_reserve:', @rhythm_department), 'department_reserve', @rhythm_department, NULL, NULL, 120),
+  (CONCAT('department_reserve:', @rhythm_department), 'department_reserve', @rhythm_department, NULL, NULL, 0),
   (CONCAT('department_generated:', @rhythm_department), 'department_generated', @rhythm_department, NULL, NULL, 0),
-  (CONCAT('department_reserve:', @tower_department), 'department_reserve', @tower_department, NULL, NULL, 90),
+  (CONCAT('department_reserve:', @tower_department), 'department_reserve', @tower_department, NULL, NULL, 0),
   (CONCAT('department_generated:', @tower_department), 'department_generated', @tower_department, NULL, NULL, 0),
-  (CONCAT('department_reserve:', @gift_shop_department), 'department_reserve', @gift_shop_department, NULL, NULL, 500),
+  (CONCAT('department_reserve:', @gift_shop_department), 'department_reserve', @gift_shop_department, NULL, NULL, 0),
   (CONCAT('department_generated:', @gift_shop_department), 'department_generated', @gift_shop_department, NULL, NULL, 0),
-  (CONCAT('department_reserve:', @support_department), 'department_reserve', @support_department, NULL, NULL, 80),
+  (CONCAT('department_reserve:', @support_department), 'department_reserve', @support_department, NULL, NULL, 0),
   (CONCAT('department_generated:', @support_department), 'department_generated', @support_department, NULL, NULL, 0),
   (CONCAT('member_wallet:', @alice_attendee), 'member_wallet', NULL, @alice_attendee, NULL, 210),
   (CONCAT('member_wallet:', @casey_attendee), 'member_wallet', NULL, @casey_attendee, NULL, 90),
@@ -222,20 +223,14 @@ VALUES
   (CONCAT('session_wallet:', @session_racing), 'session_wallet', NULL, NULL, @session_racing, 25),
   (CONCAT('session_wallet:', @session_morgan_tower), 'session_wallet', NULL, NULL, @session_morgan_tower, 0),
   (CONCAT('session_wallet:', @session_claw), 'session_wallet', NULL, NULL, @session_claw, 40),
-  (CONCAT('session_wallet:', @session_retro_closed), 'session_wallet', NULL, NULL, @session_retro_closed, 0),
+  (CONCAT('session_wallet:', @session_retro_closed), 'session_wallet', NULL, NULL, @session_retro_closed, 20),
   (CONCAT('session_wallet:', @session_vr_active), 'session_wallet', NULL, NULL, @session_vr_active, 0),
   (CONCAT('session_wallet:', @session_pinball_active), 'session_wallet', NULL, NULL, @session_pinball_active, 0);
 
 SET @gift_shop_budget_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = 'gift_shop_budget');
 SET @gift_shop_revenue_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = 'gift_shop_revenue');
 SET @gift_shop_investment_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = 'gift_shop_investment');
-SET @retro_reserve_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('department_reserve:', @retro_department));
-SET @vr_reserve_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('department_reserve:', @vr_department));
-SET @claw_reserve_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('department_reserve:', @claw_department));
-SET @laser_reserve_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('department_reserve:', @laser_department));
-SET @pinball_reserve_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('department_reserve:', @pinball_department));
-SET @racing_reserve_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('department_reserve:', @racing_department));
-SET @tower_reserve_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('department_reserve:', @tower_department));
+SET @gift_shop_inventory_spend_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = 'gift_shop_inventory_spend');
 SET @alice_wallet_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('member_wallet:', @alice_attendee));
 SET @casey_wallet_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('member_wallet:', @casey_attendee));
 SET @jordan_wallet_account := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('member_wallet:', @jordan_attendee));
@@ -243,36 +238,36 @@ SET @morgan_wallet_account := (SELECT ticket_account_id FROM ticket_accounts WHE
 SET @session_laser_wallet := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('session_wallet:', @session_laser_alpha));
 SET @session_racing_wallet := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('session_wallet:', @session_racing));
 SET @session_claw_wallet := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('session_wallet:', @session_claw));
+SET @session_retro_closed_wallet := (SELECT ticket_account_id FROM ticket_accounts WHERE account_code = CONCAT('session_wallet:', @session_retro_closed));
 
 -- Ticket transactions: one week of owner, department, member, and gift shop activity.
 INSERT INTO ticket_transactions (transaction_type, source_account_id, destination_account_id, amount, department_id, attendee_id, attendee_session_id, employee_id, gift_shop_item_id, created_by_user_id, note, created_at)
 VALUES
   ('owner_investment', NULL, @gift_shop_budget_account, 2200, NULL, NULL, NULL, NULL, NULL, @owner_user, 'Owner created weekly operating credits.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
   ('owner_investment', NULL, @gift_shop_investment_account, 2200, NULL, NULL, NULL, NULL, NULL, @owner_user, 'Owner investment reporting counter.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('owner_allocation', @gift_shop_budget_account, @retro_reserve_account, 420, @retro_department, NULL, NULL, NULL, NULL, @owner_user, 'Weekly Retro budget.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('owner_allocation', @gift_shop_budget_account, @vr_reserve_account, 340, @vr_department, NULL, NULL, NULL, NULL, @owner_user, 'Weekly VR budget.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('owner_allocation', @gift_shop_budget_account, @laser_reserve_account, 330, @laser_department, NULL, NULL, NULL, NULL, @owner_user, 'Weekly Laser Maze budget.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('owner_allocation', @gift_shop_budget_account, @pinball_reserve_account, 240, @pinball_department, NULL, NULL, NULL, NULL, @owner_user, 'Weekly Pinball budget.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('owner_allocation', @gift_shop_budget_account, @racing_reserve_account, 250, @racing_department, NULL, NULL, NULL, NULL, @owner_user, 'Weekly Racing budget.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('owner_allocation', @gift_shop_budget_account, @tower_reserve_account, 390, @tower_department, NULL, NULL, NULL, NULL, @owner_user, 'Weekly Prize Tower budget.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('owner_allocation', @gift_shop_budget_account, @claw_reserve_account, 40, @claw_department, NULL, NULL, NULL, NULL, @owner_user, 'Small Claw Corner budget.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 250, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, @candy_bar_item, @gift_shop_user, 'Candy Bar stocking (1 ticket x 250 units).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 240, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, @sticker_pack_item, @gift_shop_user, 'Sticker Pack stocking (2 x 120).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 200, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, @arcade_tumbler_item, @gift_shop_user, 'Arcade Tumbler stocking (8 x 25).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 216, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, @mystery_plush_item, @gift_shop_user, 'Mystery Plush stocking (12 x 18).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 204, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, @led_sword_item, @gift_shop_user, 'LED Sword stocking (17 x 12).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 500, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, NULL, @gift_shop_user, 'VIP Party Voucher stocking (125 x 4).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
   ('manual_override', NULL, @alice_wallet_account, 180, NULL, @alice_attendee, NULL, @support_employee, NULL, @support_user, 'Imported member wallet balance for Alice.', DATE_SUB(NOW(), INTERVAL 6 DAY)),
   ('manual_override', NULL, @jordan_wallet_account, 130, NULL, @jordan_attendee, NULL, @support_employee, NULL, @support_user, 'Imported member wallet balance for Jordan.', DATE_SUB(NOW(), INTERVAL 5 DAY)),
   ('manual_override', NULL, @morgan_wallet_account, 420, NULL, @morgan_attendee, NULL, @support_employee, NULL, @support_user, 'Imported member wallet balance for Morgan.', DATE_SUB(NOW(), INTERVAL 4 DAY)),
-  ('department_admission', NULL, @gift_shop_budget_account, 60, @vr_department, @alice_attendee, @session_alice_vr, @laser_employee, NULL, @laser_user, 'Alice VR admission credited to owner credits.', DATE_SUB(NOW(), INTERVAL 6 DAY)),
-  ('department_payout', @vr_reserve_account, @alice_wallet_account, 120, @vr_department, @alice_attendee, @session_alice_vr, @laser_employee, NULL, @laser_user, 'Alice VR payout.', DATE_SUB(NOW(), INTERVAL 6 DAY)),
+  ('department_admission', NULL, @gift_shop_budget_account, 60, @vr_department, @alice_attendee, @session_alice_vr, @laser_employee, NULL, @laser_user, 'Alice VR admission credited to operating budget.', DATE_SUB(NOW(), INTERVAL 6 DAY)),
+  ('department_payout', @gift_shop_budget_account, @alice_wallet_account, 120, @vr_department, @alice_attendee, @session_alice_vr, @laser_employee, NULL, @laser_user, 'Alice VR payout.', DATE_SUB(NOW(), INTERVAL 6 DAY)),
   ('department_admission', NULL, @gift_shop_budget_account, 35, @laser_department, NULL, @session_laser_alpha, @laser_employee, NULL, @laser_user, 'Laser Team Alpha admission.', DATE_SUB(NOW(), INTERVAL 5 DAY)),
-  ('department_payout', @laser_reserve_account, @session_laser_wallet, 70, @laser_department, NULL, @session_laser_alpha, @laser_employee, NULL, @laser_user, 'Laser Team Alpha payout.', DATE_SUB(NOW(), INTERVAL 5 DAY)),
+  ('department_payout', @gift_shop_budget_account, @session_laser_wallet, 70, @laser_department, NULL, @session_laser_alpha, @laser_employee, NULL, @laser_user, 'Laser Team Alpha payout.', DATE_SUB(NOW(), INTERVAL 5 DAY)),
   ('department_admission', @jordan_wallet_account, @gift_shop_budget_account, 20, @pinball_department, @jordan_attendee, @session_jordan_pinball, @pinball_employee, NULL, @pinball_user, 'Jordan Pinball member admission.', DATE_SUB(NOW(), INTERVAL 4 DAY)),
-  ('department_payout', @pinball_reserve_account, @jordan_wallet_account, 35, @pinball_department, @jordan_attendee, @session_jordan_pinball, @pinball_employee, NULL, @pinball_user, 'Pinball payout.', DATE_SUB(NOW(), INTERVAL 4 DAY)),
+  ('department_payout', @gift_shop_budget_account, @jordan_wallet_account, 35, @pinball_department, @jordan_attendee, @session_jordan_pinball, @pinball_employee, NULL, @pinball_user, 'Pinball payout.', DATE_SUB(NOW(), INTERVAL 4 DAY)),
   ('department_admission', NULL, @gift_shop_budget_account, 30, @racing_department, NULL, @session_racing, @racing_employee, NULL, @racing_user, 'Racing walk-in admission.', DATE_SUB(NOW(), INTERVAL 3 DAY)),
-  ('department_payout', @racing_reserve_account, @session_racing_wallet, 45, @racing_department, NULL, @session_racing, @racing_employee, NULL, @racing_user, 'Racing payout.', DATE_SUB(NOW(), INTERVAL 3 DAY)),
+  ('department_payout', @gift_shop_budget_account, @session_racing_wallet, 45, @racing_department, NULL, @session_racing, @racing_employee, NULL, @racing_user, 'Racing payout.', DATE_SUB(NOW(), INTERVAL 3 DAY)),
   ('department_admission', @morgan_wallet_account, @gift_shop_budget_account, 45, @tower_department, @morgan_attendee, @session_morgan_tower, @tower_employee, NULL, @tower_user, 'Morgan Prize Tower admission.', DATE_SUB(NOW(), INTERVAL 2 DAY)),
-  ('department_payout', @tower_reserve_account, @morgan_wallet_account, 300, @tower_department, @morgan_attendee, @session_morgan_tower, @tower_employee, NULL, @tower_user, 'Big Prize Tower payout.', DATE_SUB(NOW(), INTERVAL 2 DAY)),
+  ('department_payout', @gift_shop_budget_account, @morgan_wallet_account, 300, @tower_department, @morgan_attendee, @session_morgan_tower, @tower_employee, NULL, @tower_user, 'Big Prize Tower payout.', DATE_SUB(NOW(), INTERVAL 2 DAY)),
   ('department_admission', NULL, @gift_shop_budget_account, 15, @claw_department, NULL, @session_claw, @floater_employee, NULL, @floater_user, 'Claw walk-in admission.', DATE_SUB(NOW(), INTERVAL 2 DAY)),
-  ('department_payout', @claw_reserve_account, @session_claw_wallet, 40, @claw_department, NULL, @session_claw, @floater_employee, NULL, @floater_user, 'Claw payout depleted budget.', DATE_SUB(NOW(), INTERVAL 2 DAY)),
+  ('department_payout', @gift_shop_budget_account, @session_claw_wallet, 40, @claw_department, NULL, @session_claw, @floater_employee, NULL, @floater_user, 'Claw payout.', DATE_SUB(NOW(), INTERVAL 2 DAY)),
   ('department_admission', NULL, @gift_shop_budget_account, 25, @retro_department, NULL, @session_retro_closed, @arcade_employee, NULL, @arcade_user, 'Retro closed session admission.', DATE_SUB(NOW(), INTERVAL 1 DAY)),
-  ('department_payout', @retro_reserve_account, NULL, 20, @retro_department, NULL, @session_retro_closed, @arcade_employee, NULL, @arcade_user, 'Retro closed session payout redeemed immediately.', DATE_SUB(NOW(), INTERVAL 1 DAY)),
+  ('department_payout', @gift_shop_budget_account, @session_retro_closed_wallet, 20, @retro_department, NULL, @session_retro_closed, @arcade_employee, NULL, @arcade_user, 'Retro closed session payout to session wallet.', DATE_SUB(NOW(), INTERVAL 1 DAY)),
   ('department_admission', NULL, @gift_shop_budget_account, 25, @retro_department, NULL, @session_retro_active, @arcade_employee, NULL, @arcade_user, 'Active Retro session admission.', DATE_SUB(NOW(), INTERVAL 45 MINUTE)),
   ('department_admission', NULL, @gift_shop_budget_account, 60, @vr_department, NULL, @session_vr_active, @laser_employee, NULL, @laser_user, 'Active VR session admission.', DATE_SUB(NOW(), INTERVAL 35 MINUTE)),
   ('department_admission', NULL, @gift_shop_budget_account, 20, @pinball_department, NULL, @session_pinball_active, @pinball_employee, NULL, @pinball_user, 'Active Pinball session admission.', DATE_SUB(NOW(), INTERVAL 20 MINUTE)),

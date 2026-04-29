@@ -10,6 +10,8 @@ DROP TABLE IF EXISTS ticket_accounts;
 DROP TABLE IF EXISTS gift_shop_items;
 DROP TABLE IF EXISTS attendee_sessions;
 DROP TABLE IF EXISTS attendees;
+DROP TABLE IF EXISTS hr_action_logs;
+DROP TABLE IF EXISTS employee_sick_requests;
 DROP TABLE IF EXISTS employee_transfers;
 DROP TABLE IF EXISTS employee_hours;
 DROP TABLE IF EXISTS employee_shifts;

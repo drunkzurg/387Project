@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Minus, Pencil, Plus } from "lucide-react"
+import { Pencil } from "lucide-react"
 import {
   CartesianGrid,
   Line,
@@ -37,7 +37,7 @@ type OwnerSummary = {
   credits: number
   circulation: number
   giftShopRevenue: number
-  departmentReserve: number
+  inventoryProcurement: number
   departmentGenerated: number
   activeAttendees: number
 }
@@ -309,9 +309,6 @@ export function OwnerDashboard({
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isInvestmentOpen, setIsInvestmentOpen] = useState(false)
   const [editingDepartment, setEditingDepartment] = useState<OwnerDepartment | null>(null)
-  const [budgetingDepartment, setBudgetingDepartment] = useState<OwnerDepartment | null>(null)
-  const [budgetIncrease, setBudgetIncrease] = useState(0)
-  const [showInvestmentWarning, setShowInvestmentWarning] = useState(false)
 
   useEffect(() => {
     document.documentElement.classList.add("ams-owner-theme")
@@ -334,10 +331,6 @@ export function OwnerDashboard({
       ),
     [departments],
   )
-  const previewCredits = summary.credits - budgetIncrease
-  const previewDepartmentBudget = budgetingDepartment
-    ? budgetingDepartment.reserveBalance + budgetIncrease
-    : 0
   const activityConfig: ChartConfig = {
     value: {
       color: "#e3337e",
@@ -359,7 +352,7 @@ export function OwnerDashboard({
             </a>
           </>
         }
-        description="Manage credits, department budgets, and ticket economy trends."
+        description="Manage credits, department generated pools, and ticket economy trends."
         roleLabel={`Logged in as ${currentUser.name}`}
         title="Owner Dashboard"
       >
@@ -379,6 +372,11 @@ export function OwnerDashboard({
             <StatCard detail="Available owner-backed ticket credits" label="Credits" value={number(summary.credits)} />
             <StatCard detail="All non-reporting ticket balances" label="Circulation" value={number(summary.circulation)} />
             <StatCard label="Generated" value={number(summary.departmentGenerated)} />
+            <StatCard
+              detail="Cumulative gift shop stocking (tickets)"
+              label="Inventory procurement"
+              value={number(summary.inventoryProcurement)}
+            />
             <StatCard detail="Tickets collected by gift shop" label="Gift Shop Revenue" value={number(summary.giftShopRevenue)} />
             <StatCard detail="Across active play sessions" label="Active Attendees" value={number(summary.activeAttendees)} />
           </ResponsiveGrid>
@@ -455,8 +453,7 @@ export function OwnerDashboard({
                     <TableHead>Entrance Fee</TableHead>
                     <TableHead>Capacity</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Budget / Prize Limit</TableHead>
-                    <TableHead>Generated</TableHead>
+                    <TableHead>Generated pool</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -471,25 +468,6 @@ export function OwnerDashboard({
                         <Badge variant={department.operatingStatus === "active" ? "success" : "warning"}>
                           {labelize(department.operatingStatus)}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-heading">{number(department.reserveBalance)}</span>
-                          <Button
-                            aria-label={`Edit ${department.name} budget`}
-                            onClick={() => {
-                              setBudgetingDepartment(department)
-                              setBudgetIncrease(0)
-                            }}
-                            size="sm"
-                            variant="neutral"
-                          >
-                            <span aria-hidden="true" className="flex items-center">
-                              <Plus className="size-3" />
-                              <Minus className="size-3" />
-                            </span>
-                          </Button>
-                        </div>
                       </TableCell>
                       <TableCell>{number(department.generatedBalance)}</TableCell>
                       <TableCell>
@@ -584,52 +562,6 @@ export function OwnerDashboard({
         </ModalShell>
       ) : null}
 
-      {budgetingDepartment ? (
-        <ModalShell onClose={() => setBudgetingDepartment(null)} title={`Update ${budgetingDepartment.name} Budget`}>
-          <Card className="bg-main">
-            <CardHeader>
-              <CardTitle>Budget / Prize Limit</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form
-                action="owner_dashboard.php"
-                className="grid gap-4"
-                method="post"
-                onSubmit={(event) => {
-                  if (previewCredits < 0 || previewDepartmentBudget < 0) {
-                    event.preventDefault()
-                    setShowInvestmentWarning(true)
-                  }
-                }}
-              >
-                <input name="action" type="hidden" value="allocate_budget" />
-                <input name="department_id" type="hidden" value={budgetingDepartment.departmentId} />
-                <Field label="Budget Change">
-                  <input
-                    className={inputClass}
-                    name="amount"
-                    onChange={(event) => setBudgetIncrease(Number(event.currentTarget.value || 0))}
-                    step={1}
-                    type="number"
-                  />
-                </Field>
-                <div className="grid gap-1 rounded-base border-2 border-border bg-secondary-background p-3">
-                  <p className="m-0">Credits now: {number(summary.credits)}</p>
-                  <p className={previewCredits < 0 ? "m-0 font-heading text-danger" : "m-0 font-heading"}>
-                    Credits after increase: {number(previewCredits)}
-                  </p>
-                  <p className="m-0">Department budget now: {number(budgetingDepartment.reserveBalance)}</p>
-                  <p className={previewDepartmentBudget < 0 ? "m-0 font-heading text-danger" : "m-0 font-heading"}>
-                    Department budget after change: {number(previewDepartmentBudget)}
-                  </p>
-                </div>
-                <Button type="submit">Apply Budget Change</Button>
-              </form>
-            </CardContent>
-          </Card>
-        </ModalShell>
-      ) : null}
-
       {isInvestmentOpen ? (
         <ModalShell onClose={() => setIsInvestmentOpen(false)} title="Increase Investment">
           <form action="owner_dashboard.php" className="grid gap-4" method="post">
@@ -639,24 +571,6 @@ export function OwnerDashboard({
             </Field>
             <Button type="submit">Increase Credits</Button>
           </form>
-        </ModalShell>
-      ) : null}
-
-      {showInvestmentWarning ? (
-        <ModalShell onClose={() => setShowInvestmentWarning(false)} title="Increase Investment First">
-          <div className="grid gap-4">
-            <p className="m-0">
-              This budget change would make credits or the department budget negative. Increase owner investment or lower the decrease before applying it.
-            </p>
-            <Button
-              onClick={() => {
-                setShowInvestmentWarning(false)
-                setIsInvestmentOpen(true)
-              }}
-            >
-              Increase Investment
-            </Button>
-          </div>
         </ModalShell>
       ) : null}
     </>

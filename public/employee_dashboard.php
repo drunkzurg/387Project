@@ -233,10 +233,12 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo,
                     (string)($_POST['name'] ?? ''),
                     (int)($_POST['ticket_price'] ?? 0),
-                    (float)($_POST['cost_price'] ?? 0),
+                    (int) max(0, round((float)($_POST['cost_price'] ?? 0))),
                     (int)($_POST['stock'] ?? 0),
                     (string)($_POST['category'] ?? ''),
-                    (string)($_POST['description'] ?? '')
+                    (string)($_POST['description'] ?? ''),
+                    (int)$employee['department_id'],
+                    (int)$user['user_id']
                 );
                 $_SESSION['employee_dashboard_flash'] = 'Gift shop item added.';
                 break;
@@ -251,11 +253,13 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     (int)($_POST['item_id'] ?? 0),
                     (string)($_POST['name'] ?? ''),
                     (int)($_POST['ticket_price'] ?? 0),
-                    (float)($_POST['cost_price'] ?? 0),
+                    (int) max(0, round((float)($_POST['cost_price'] ?? 0))),
                     (int)($_POST['stock'] ?? 0),
                     (string)($_POST['status'] ?? 'active'),
                     (string)($_POST['category'] ?? ''),
-                    (string)($_POST['description'] ?? '')
+                    (string)($_POST['description'] ?? ''),
+                    (int)$employee['department_id'],
+                    (int)$user['user_id']
                 );
                 $_SESSION['employee_dashboard_flash'] = 'Gift shop item updated.';
                 break;
@@ -333,6 +337,7 @@ $walletSources = [];
 $giftShopItems = [];
 $redeemableGiftShopItems = [];
 $giftShopBudgetAvailable = 0;
+$giftShopInventorySpendTotal = 0;
 $recentRedemptions = [];
 $claimCandidates = [];
 $openLiveShift = null;
@@ -474,7 +479,15 @@ if ($employee) {
     }
 
     if ($employee['department_type'] === 'gift_shop') {
-        $giftShopBudgetAvailable = (int)($employee['reserve_balance'] ?? 0);
+        $budgetRow = $pdo->query(
+            "SELECT balance FROM ticket_accounts WHERE account_code = 'gift_shop_budget' LIMIT 1"
+        )->fetch();
+        $giftShopBudgetAvailable = $budgetRow ? (int) $budgetRow['balance'] : 0;
+
+        $invRow = $pdo->query(
+            "SELECT balance FROM ticket_accounts WHERE account_code = 'gift_shop_inventory_spend' LIMIT 1"
+        )->fetch();
+        $giftShopInventorySpendTotal = $invRow ? (int) $invRow['balance'] : 0;
 
         $giftShopItems = $pdo->query(
             'SELECT gift_shop_item_id, name, ticket_price, cost_price, stock, status, category, description
@@ -650,6 +663,7 @@ $frontendProps = [
         $recentSessions
     ),
     'giftShopBudgetAvailable' => $giftShopBudgetAvailable,
+    'giftShopInventorySpendTotal' => $giftShopInventorySpendTotal,
     'giftShopItems' => array_map(
         static fn(array $item): array => [
             'itemId' => (int)$item['gift_shop_item_id'],
@@ -909,8 +923,12 @@ $frontendProps = [
     <?php if ($employee['department_type'] === 'gift_shop' && $employee['department_id'] !== null): ?>
       <h2>Gift Shop Budget</h2>
       <p>
-        Gift shop budget allocated by owner:
+        Operating budget (owner investment, admissions, transfers; debited by play-area payouts and inventory restocking):
         <strong><?php echo number_format($giftShopBudgetAvailable); ?></strong> tickets.
+      </p>
+      <p>
+        Cumulative inventory procurement recorded in the ledger:
+        <strong><?php echo number_format($giftShopInventorySpendTotal); ?></strong> tickets.
       </p>
 
       <h2>Gift Shop Catalog</h2>
@@ -927,8 +945,8 @@ $frontendProps = [
         </label>
         <br>
         <label>
-          Cost Price:
-          <input type="number" name="cost_price" min="0" step="0.01" value="0.00" required>
+          Unit cost to stock (tickets per unit, whole tickets):
+          <input type="number" name="cost_price" min="0" step="1" value="0" required>
         </label>
         <br>
         <label>
@@ -980,8 +998,8 @@ $frontendProps = [
                 </label>
                 <br>
                 <label>
-                  <span>Cost Price</span><br>
-                  <input type="number" name="cost_price" min="0" step="0.01" value="<?php echo $escape(number_format((float)$item['cost_price'], 2, '.', '')); ?>" required>
+                  <span>Unit cost (tickets per unit)</span><br>
+                  <input type="number" name="cost_price" min="0" step="1" value="<?php echo (int) round((float) $item['cost_price']); ?>" required>
                 </label>
                 <br>
                 <label>

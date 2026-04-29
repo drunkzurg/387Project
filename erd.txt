@@ -1,3 +1,11 @@
+// Arcade Management System — physical data model (dbdiagram.io / Vertabelo friendly).
+// Source of truth for DDL: sql/migrations/000_run_all.sql
+//
+// ----- Operating budget (tickets, not dollars) -----
+// gift_shop_budget is the shared pool: owner investment, admissions, and transfers IN;
+// play-area payouts and gift-shop inventory procurement OUT. gift_shop_inventory_spend
+// tracks cumulative procurement into an audit/holding account. See TicketService.
+
 // ========== USERS ==========
 
 Table users {
@@ -5,7 +13,7 @@ Table users {
   name varchar
   email varchar
   password_hash varchar
-  role varchar                // sys_admin, owner, employee, hr
+  role varchar                // sys_admin, owner, employee, hr (ENUM in DB)
   pending_approval boolean
 }
 
@@ -30,7 +38,7 @@ Table employees {
   user_id integer [not null]
   name varchar
   department_id integer
-  hourly_wage float
+  hourly_wage float           // DECIMAL in DB
   status varchar              // active, transferred, terminated
 }
 
@@ -41,6 +49,21 @@ Table employee_shifts {
   employee_id integer [not null]
   start_time datetime
   end_time datetime
+  entry_type varchar          // live, manual — clock-in vs manual backfill
+}
+
+// ========== EMPLOYEE SICK REQUESTS ==========
+
+Table employee_sick_requests {
+  sick_request_id integer [primary key]
+  employee_id integer [not null]
+  request_date date
+  status varchar              // waiting, approved, denied
+  notes varchar
+  requested_at datetime
+  reviewed_by_user_id integer
+  reviewed_at datetime
+  review_notes varchar
 }
 
 // ========== EMPLOYEE HOURS ==========
@@ -61,6 +84,17 @@ Table employee_transfers {
   to_department integer
   date date
   handled_by_user_id integer
+}
+
+// ========== HR ACTION LOGS ==========
+
+Table hr_action_logs {
+  hr_action_log_id integer [primary key]
+  action_type varchar
+  employee_id integer
+  handled_by_user_id integer [not null]
+  details varchar
+  created_at datetime
 }
 
 // ========== ATTENDEES ==========
@@ -99,7 +133,7 @@ Table gift_shop_items {
   gift_shop_item_id integer [primary key]
   name varchar
   ticket_price integer
-  cost_price float
+  cost_price float            // DECIMAL — tickets per unit for stocking
   stock integer
   status varchar              // active, inactive
   category varchar
@@ -113,11 +147,11 @@ Table gift_shop_items {
 Table ticket_accounts {
   ticket_account_id integer [primary key]
   account_code varchar
-  account_kind varchar        // gift_shop_budget, gift_shop_revenue, gift_shop_investment, department_reserve, department_generated, member_wallet, session_wallet
+  account_kind varchar        // gift_shop_budget, gift_shop_revenue, gift_shop_investment, gift_shop_inventory_spend, department_reserve, department_generated, member_wallet, session_wallet
   department_id integer
   attendee_id integer
   attendee_session_id integer
-  balance integer
+  balance bigint              // BIGINT UNSIGNED in DB
   created_at datetime
   updated_at datetime
 }
@@ -126,10 +160,10 @@ Table ticket_accounts {
 
 Table ticket_transactions {
   ticket_transaction_id integer [primary key]
-  transaction_type varchar    // department_admission, department_payout, gift_shop_redemption, owner_allocation, owner_generated_transfer, owner_investment, member_claim_transfer, manual_override
+  transaction_type varchar    // department_admission, department_payout, gift_shop_redemption, gift_shop_inventory_procurement, gift_shop_inventory_credit, owner_allocation, owner_generated_transfer, owner_investment, member_claim_transfer, manual_override
   source_account_id integer
   destination_account_id integer
-  amount integer
+  amount bigint               // BIGINT UNSIGNED in DB
   department_id integer
   attendee_id integer
   attendee_session_id integer
@@ -151,7 +185,7 @@ Table gift_shop_redemptions {
   attendee_session_id integer
   source_account_id integer [not null]
   quantity integer
-  total_tickets integer
+  total_tickets bigint        // BIGINT UNSIGNED in DB
   notes varchar
   redeemed_at datetime
 }
@@ -174,11 +208,15 @@ Table revenue_reports {
 Ref: employees.user_id > users.user_id
 Ref: employees.department_id > departments.department_id
 Ref: employee_shifts.employee_id > employees.employee_id
+Ref: employee_sick_requests.employee_id > employees.employee_id
+Ref: employee_sick_requests.reviewed_by_user_id > users.user_id
 Ref: employee_hours.employee_id > employees.employee_id
 Ref: employee_transfers.employee_id > employees.employee_id
 Ref: employee_transfers.from_department > departments.department_id
 Ref: employee_transfers.to_department > departments.department_id
 Ref: employee_transfers.handled_by_user_id > users.user_id
+Ref: hr_action_logs.employee_id > employees.employee_id
+Ref: hr_action_logs.handled_by_user_id > users.user_id
 Ref: attendees.verified_by_employee_id > employees.employee_id
 Ref: attendee_sessions.attendee_id > attendees.attendee_id
 Ref: attendee_sessions.department_id > departments.department_id

@@ -87,16 +87,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['owner_dashboard_flash'] = 'Gift shop budget increased from owner investment.';
                 break;
 
-            case 'allocate_budget':
-                TicketService::allocateDepartmentReserve(
-                    $pdo,
-                    (int)($_POST['department_id'] ?? 0),
-                    (int)($_POST['amount'] ?? 0),
-                    (int)$user['user_id']
-                );
-                $_SESSION['owner_dashboard_flash'] = 'Department reserve allocation saved.';
-                break;
-
             case 'transfer_generated':
                 TicketService::transferGeneratedToBudget(
                     $pdo,
@@ -120,7 +110,7 @@ $summary = [
     'gift_shop_budget' => 0,
     'gift_shop_revenue' => 0,
     'gift_shop_investment' => 0,
-    'department_reserve' => 0,
+    'gift_shop_inventory_spend' => 0,
     'department_generated' => 0,
     'active_attendees' => 0,
 ];
@@ -132,7 +122,7 @@ $summaryRows = $pdo->query(
         'gift_shop_budget',
         'gift_shop_revenue',
         'gift_shop_investment',
-        'department_reserve',
+        'gift_shop_inventory_spend',
         'department_generated'
      )"
 )->fetchAll();
@@ -284,6 +274,8 @@ $activityRowsStmt = $pdo->prepare(
         'department_admission',
         'department_payout',
         'gift_shop_redemption',
+        'gift_shop_inventory_procurement',
+        'gift_shop_inventory_credit',
         'owner_generated_transfer',
         'owner_investment',
         'manual_override'
@@ -298,9 +290,12 @@ $activityRowsStmt->execute(['activity_start' => $activityStart]);
 $activityRows = $activityRowsStmt->fetchAll();
 
 $signedAmount = static function (array $transaction): int {
-    return $transaction['transaction_type'] === 'department_payout'
-        ? -1 * (int)$transaction['amount']
-        : (int)$transaction['amount'];
+    $type = (string) $transaction['transaction_type'];
+    if ($type === 'department_payout' || $type === 'gift_shop_inventory_procurement') {
+        return -1 * (int) $transaction['amount'];
+    }
+
+    return (int) $transaction['amount'];
 };
 
 $activityChart = array_map(
@@ -348,7 +343,7 @@ $frontendProps = [
         'credits' => $summary['gift_shop_budget'],
         'circulation' => $summary['circulation'],
         'giftShopRevenue' => $summary['gift_shop_revenue'],
-        'departmentReserve' => $summary['department_reserve'],
+        'inventoryProcurement' => $summary['gift_shop_inventory_spend'],
         'departmentGenerated' => $summary['department_generated'],
         'activeAttendees' => $summary['active_attendees'],
     ],
@@ -428,8 +423,8 @@ $frontendProps = [
 
   <h2>Ticket Summary</h2>
   <ul>
-    <li>Gift Shop Budget Available: <strong><?php echo number_format($summary['gift_shop_budget']); ?></strong> tickets</li>
-    <li>Tickets Allocated To Departments: <strong><?php echo number_format($summary['department_reserve']); ?></strong> tickets</li>
+    <li>Operating budget (play-area payouts and gift shop stocking draw from this pool): <strong><?php echo number_format($summary['gift_shop_budget']); ?></strong> tickets</li>
+    <li>Inventory procurement recorded (ledger): <strong><?php echo number_format($summary['gift_shop_inventory_spend']); ?></strong> tickets</li>
     <li>Generated Tickets Waiting Transfer: <strong><?php echo number_format($summary['department_generated']); ?></strong> tickets</li>
     <li>Gift Shop Ticket Revenue: <strong><?php echo number_format($summary['gift_shop_revenue']); ?></strong> tickets</li>
     <li>Owner Investment Counter: <strong><?php echo number_format($summary['gift_shop_investment']); ?></strong> tickets</li>
@@ -489,7 +484,6 @@ $frontendProps = [
       <th>Capacity</th>
       <th>Status</th>
       <th>Availability</th>
-      <th>Reserve</th>
       <th>Generated</th>
       <th>Active Attendees</th>
       <th>Update</th>
@@ -508,7 +502,6 @@ $frontendProps = [
         </td>
         <td><?php echo $escape($statusLabel((string)$department['operating_status'])); ?></td>
         <td><?php echo $escape($availabilityLabel($department)); ?></td>
-        <td><?php echo number_format((int)$department['reserve_balance']); ?></td>
         <td><?php echo number_format((int)$department['generated_balance']); ?></td>
         <td>
           <?php if ($department['department_type'] === 'play_area'): ?>
@@ -575,26 +568,6 @@ $frontendProps = [
       <input type="number" name="amount" min="1" step="1" required>
     </label>
     <button type="submit">Increase Budget</button>
-  </form>
-
-  <h3>Allocate Budget To A Department</h3>
-  <form method="post" action="">
-    <input type="hidden" name="action" value="allocate_budget">
-    <label>
-      Department:
-      <select name="department_id" required>
-        <?php foreach ($playAreaDepartments as $department): ?>
-          <option value="<?php echo (int)$department['department_id']; ?>">
-            <?php echo $escape((string)$department['name']); ?> (reserve <?php echo number_format((int)$department['reserve_balance']); ?>)
-          </option>
-        <?php endforeach; ?>
-      </select>
-    </label>
-    <label>
-      Tickets:
-      <input type="number" name="amount" min="1" step="1" required>
-    </label>
-    <button type="submit">Allocate</button>
   </form>
 
   <h3>Move Generated Tickets Into Gift Shop Budget</h3>

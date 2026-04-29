@@ -144,6 +144,7 @@ export type EmployeeDashboardProps = {
   activeSessions: ActiveSession[]
   recentSessions: RecentSession[]
   giftShopBudgetAvailable: number
+  giftShopInventorySpendTotal: number
   giftShopItems: GiftShopItem[]
   redeemableGiftShopItems: GiftShopItem[]
   walletSources: WalletSource[]
@@ -208,6 +209,7 @@ export function EmployeeDashboard({
   activeSessions,
   recentSessions,
   giftShopBudgetAvailable,
+  giftShopInventorySpendTotal,
   giftShopItems,
   redeemableGiftShopItems,
   walletSources,
@@ -440,7 +442,14 @@ export function EmployeeDashboard({
         <ResponsiveGrid>
           <StatCard detail="Department type" label="Type" value={employee.departmentLabel} />
           <StatCard detail="Operating status" label="Status" value={labelize(employee.operatingStatus)} />
-          <StatCard detail="Prize budget" label="Reserve" value={number(employee.reserveBalance)} />
+          {employee.departmentType === "gift_shop" ? (
+            <>
+              <StatCard detail="Play-area payouts and stocking debit this pool" label="Operating budget" value={number(giftShopBudgetAvailable)} />
+              <StatCard detail="Recorded in the ticket ledger" label="Inventory procurement" value={number(giftShopInventorySpendTotal)} />
+            </>
+          ) : (
+            <StatCard detail="Legacy per-department reserve (unused for payouts)" label="Reserve" value={number(employee.reserveBalance)} />
+          )}
           <StatCard detail="Generated tickets" label="Generated" value={number(employee.generatedBalance)} />
           {employee.departmentType === "play_area" ? (
             <>
@@ -457,6 +466,7 @@ export function EmployeeDashboard({
       {employee.departmentType === "gift_shop" ? (
         <GiftShopPanel
           budget={giftShopBudgetAvailable}
+          inventorySpend={giftShopInventorySpendTotal}
           giftShopItems={giftShopItems}
           recentRedemptions={recentRedemptions}
           redeemableGiftShopItems={redeemableGiftShopItems}
@@ -593,12 +603,14 @@ function PlayAreaPanel({
 
 function GiftShopPanel({
   budget,
+  inventorySpend,
   giftShopItems,
   redeemableGiftShopItems,
   walletSources,
   recentRedemptions,
 }: {
   budget: number
+  inventorySpend: number
   giftShopItems: GiftShopItem[]
   redeemableGiftShopItems: GiftShopItem[]
   walletSources: WalletSource[]
@@ -606,7 +618,10 @@ function GiftShopPanel({
 }) {
   return (
     <Section title="Gift Shop Operations">
-      <StatCard detail="Budget allocated by owner" label="Gift Shop Budget" value={number(budget)} />
+      <ResponsiveGrid>
+        <StatCard detail="Owner investment, admissions, transfers; debited by payouts and stocking" label="Operating budget" value={number(budget)} />
+        <StatCard detail="Cumulative procurement recorded in ledger" label="Inventory ledger" value={number(inventorySpend)} />
+      </ResponsiveGrid>
       <Card>
         <CardHeader>
           <CardTitle>Add Catalog Item</CardTitle>
@@ -616,7 +631,7 @@ function GiftShopPanel({
             <input name="action" type="hidden" value="create_item" />
             <Field label="Name"><input className={inputClass} name="name" required type="text" /></Field>
             <Field label="Ticket Price"><input className={inputClass} max={1000} min={10} name="ticket_price" required type="number" /></Field>
-            <Field label="Cost Price"><input className={inputClass} min={0} name="cost_price" required step="0.01" type="number" /></Field>
+            <Field label="Unit cost to stock (tickets per unit, integers)"><input className={inputClass} min={0} name="cost_price" required step={1} type="number" /></Field>
             <Field label="Stock"><input className={inputClass} min={0} name="stock" required type="number" /></Field>
             <Field label="Category"><input className={inputClass} name="category" type="text" /></Field>
             <Field label="Description"><input className={inputClass} maxLength={255} name="description" type="text" /></Field>
