@@ -87,7 +87,7 @@ $departmentLabel = static function (?string $type): string {
 };
 $statusLabel = static fn(string $status): string => str_replace('_', ' ', ucfirst($status));
 
-// large switch: hr-style shift tools + TicketService entry points per department_type
+// post actions: each case maps to a form on employee-dashboard.tsx; must stay in sync with those action= values
 if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if ($employee['status'] === 'terminated') {
@@ -97,6 +97,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string)($_POST['action'] ?? '');
 
         switch ($action) {
+            // live shift row (entry_type=live) — used for the clock in/out sidecar; sync may flip department play-area status
             case 'clock_in_shift':
                 if ($employee['department_id'] === null) {
                     throw new RuntimeException('You need a department assignment before clocking in.');
@@ -123,6 +124,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['employee_dashboard_flash'] = 'Live shift started.';
                 break;
 
+            // closes the newest open live row; staffing sync may reopen play area if shift coverage rules met
             case 'clock_out_shift':
                 $closeShift = $pdo->prepare(
                     "UPDATE employee_shifts
@@ -145,6 +147,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['employee_dashboard_flash'] = 'Live shift closed.';
                 break;
 
+            // backdated shift from hr modal or self-serve form (entry_type=manual, both times required)
             case 'add_shift':
             case 'add_manual_shift':
                 $startValue = trim((string)($_POST['start_time'] ?? ''));
@@ -174,6 +177,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['employee_dashboard_flash'] = 'Shift added successfully.';
                 break;
 
+            // creates a waiting row for hr to approve; unique per employee+date in db
             case 'request_sick_day':
                 $requestDateValue = trim((string)($_POST['request_date'] ?? ''));
                 $requestDate = DateTimeImmutable::createFromFormat('Y-m-d', $requestDateValue);
@@ -193,6 +197,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['employee_dashboard_flash'] = 'Sick day request sent to HR.';
                 break;
 
+            // play area: starts attendee_sessions + session ticket wallet; may attach member for member_wallet mode
             case 'open_session':
                 if ($employee['department_type'] !== 'play_area' || $employee['department_id'] === null) {
                     throw new RuntimeException('Only play-area employees can open attendee sessions.');
@@ -212,6 +217,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['employee_dashboard_flash'] = 'Attendee session opened.';
                 break;
 
+            // play area: closes session, runs ticket ledger (payout to member or session wallet)
             case 'close_session':
                 if ($employee['department_type'] !== 'play_area') {
                     throw new RuntimeException('Only play-area employees can close attendee sessions.');
@@ -228,6 +234,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['employee_dashboard_flash'] = 'Attendee session closed.';
                 break;
 
+            // catalog crud for gift_shop_items; ledger entries happen only on redemption (redeem_item)
             case 'create_item':
                 if ($employee['department_type'] !== 'gift_shop' || $employee['department_id'] === null) {
                     throw new RuntimeException('Only gift shop staff can add catalog items.');
@@ -247,6 +254,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['employee_dashboard_flash'] = 'Gift shop item added.';
                 break;
 
+            // same catalog table as create_item; stock/status affect whether redeem_item can proceed
             case 'update_item':
                 if ($employee['department_type'] !== 'gift_shop' || $employee['department_id'] === null) {
                     throw new RuntimeException('Only gift shop staff can update catalog items.');
@@ -273,6 +281,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Only gift shop staff can redeem items.');
                 }
 
+                // ui sends source_token like "member:12:99" or "session:5:99" — see walletSources query concat below
                 $sourceToken = explode(':', (string)($_POST['source_token'] ?? ''));
                 if (count($sourceToken) !== 3) {
                     throw new RuntimeException('Please select a valid ticket source.');
@@ -304,6 +313,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['employee_dashboard_flash'] = 'Gift shop redemption recorded.';
                 break;
 
+            // support: turns an orphan closed session wallet into a verified attendee + member_wallet transfer
             case 'claim_member':
                 if ($employee['department_type'] !== 'customer_support') {
                     throw new RuntimeException('Only customer-support staff can verify member claims.');
@@ -408,6 +418,7 @@ if ($employee) {
         'week_end' => $weekStart->modify('+7 days')->format('Y-m-d'),
     ]);
     $approvedSickDaysThisWeek = (int)$approvedSickStmt->fetchColumn();
+    // hr-approved sick days count as 8h toward weekly totals (matches target formula in frontend props)
     $summary['week_minutes'] += $approvedSickDaysThisWeek * 8 * 60;
     $summary['total_minutes'] += $approvedSickDaysThisWeek * 8 * 60;
 
@@ -421,6 +432,7 @@ if ($employee) {
     $sickStmt->execute(['employee_id' => $employee['employee_id']]);
     $sickRequests = $sickStmt->fetchAll();
 
+    // all verified members — play_area uses list for session dropdown; support uses full roster in react
     $members = $pdo->query(
         "SELECT
             a.attendee_id,
@@ -441,6 +453,7 @@ if ($employee) {
          ORDER BY a.name"
     )->fetchAll();
 
+    // open + recent sessions for this play-area department (session_wallet holds in-session ticket balance)
     if ($employee['department_type'] === 'play_area' && $employee['department_id'] !== null) {
         $activeStmt = $pdo->prepare(
             "SELECT
@@ -490,6 +503,7 @@ if ($employee) {
         $recentSessions = $recentStmt->fetchAll();
     }
 
+    // gift shop uses fixed ledger account_codes; redemption sources must match redeem_item token parsing above
     if ($employee['department_type'] === 'gift_shop') {
         $budgetRow = $pdo->query(
             "SELECT balance FROM ticket_accounts WHERE account_code = 'gift_shop_budget' LIMIT 1"
@@ -560,6 +574,7 @@ if ($employee) {
         )->fetchAll();
     }
 
+    // closed walk-in sessions still holding session_wallet balance — eligible for member verification flow
     if ($employee['department_type'] === 'customer_support') {
         $claimCandidates = $pdo->query(
             "SELECT

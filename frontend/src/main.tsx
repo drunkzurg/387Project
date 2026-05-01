@@ -1,3 +1,4 @@
+// vite bundle entry: mounts react islands embedded by php (see data-react-page + props script ids on each page)
 import React from "react"
 import { createRoot } from "react-dom/client"
 
@@ -26,6 +27,7 @@ const pages: { [K in PageName]: React.ComponentType<PageProps[K]> } = {
   publicHome: PublicHome,
 }
 
+// props live in a sibling <script type="application/json"> so php can inject server data without inline js objects
 function readProps<T>(mount: HTMLElement): T {
   const propsId = mount.dataset.propsId
 
@@ -43,6 +45,7 @@ function readProps<T>(mount: HTMLElement): T {
   return JSON.parse(rawProps) as T
 }
 
+// every [data-react-page] root gets its own root — multiple dashboards can coexist if markup includes several mounts
 function bootReactIslands() {
   document.documentElement.classList.add("ams-react-ready")
 
