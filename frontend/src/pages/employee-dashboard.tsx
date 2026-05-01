@@ -642,10 +642,6 @@ function GiftShopPanel({
 }) {
   return (
     <Section title="Gift Shop Operations">
-      <ResponsiveGrid>
-        <StatCard detail="Owner investment, admissions, transfers; debited by payouts and stocking" label="Operating budget" value={number(budget)} />
-        <StatCard detail="Cumulative procurement recorded in ledger" label="Inventory ledger" value={number(inventorySpend)} />
-      </ResponsiveGrid>
       <Card>
         <CardHeader>
           <CardTitle>Add Catalog Item</CardTitle>
