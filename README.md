@@ -1,10 +1,11 @@
 # Arcade Management System (Scaffold)
 
-Tech: PHP + MariaDB + vanilla JS/CSS.
+Tech: PHP + MariaDB + React (Vite) + TypeScript + Tailwind.
 
 ## Structure
 - `public/` web root (index.php, assets)
 - `src/` PHP code (controllers/models/auth/db)
+- `frontend/` React dashboard UI (built into `public/assets/build/`)
 - `templates/` PHP templates
 - `sql/` migrations + seeds
 - `config/` runtime configuration

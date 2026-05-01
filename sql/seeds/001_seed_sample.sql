@@ -6,7 +6,7 @@
 -- bcrypt hash generated via PHP password_hash('password', PASSWORD_DEFAULT)
 SET @pw := '$2y$12$3xyBZgPV9pqcI.h0LTf9X.2BmJd1M47oLNNFGRDz5abHXLxLV6.Xm';
 
--- Users kept for debug toolbar quick-login compatibility.
+-- Seed users (debug toolbar lists approved users for one-click login).
 INSERT INTO users (name, email, password_hash, role, pending_approval)
 VALUES
   ('System Admin', 'admin@arcade.local', @pw, 'sys_admin', 0),
@@ -245,12 +245,12 @@ INSERT INTO ticket_transactions (transaction_type, source_account_id, destinatio
 VALUES
   ('owner_investment', NULL, @gift_shop_budget_account, 2200, NULL, NULL, NULL, NULL, NULL, @owner_user, 'Owner created weekly operating credits.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
   ('owner_investment', NULL, @gift_shop_investment_account, 2200, NULL, NULL, NULL, NULL, NULL, @owner_user, 'Owner investment reporting counter.', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 250, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, @candy_bar_item, @gift_shop_user, 'Candy Bar stocking (1 ticket x 250 units).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 240, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, @sticker_pack_item, @gift_shop_user, 'Sticker Pack stocking (2 x 120).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 200, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, @arcade_tumbler_item, @gift_shop_user, 'Arcade Tumbler stocking (8 x 25).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 216, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, @mystery_plush_item, @gift_shop_user, 'Mystery Plush stocking (12 x 18).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 204, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, @led_sword_item, @gift_shop_user, 'LED Sword stocking (17 x 12).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 500, @gift_shop_department, NULL, NULL, NULL, @gift_shop_employee, NULL, @gift_shop_user, 'VIP Party Voucher stocking (125 x 4).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 250, @gift_shop_department, NULL, NULL, @gift_shop_employee, @candy_bar_item, @gift_shop_user, 'Candy Bar stocking (1 ticket x 250 units).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 240, @gift_shop_department, NULL, NULL, @gift_shop_employee, @sticker_pack_item, @gift_shop_user, 'Sticker Pack stocking (2 x 120).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 200, @gift_shop_department, NULL, NULL, @gift_shop_employee, @arcade_tumbler_item, @gift_shop_user, 'Arcade Tumbler stocking (8 x 25).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 216, @gift_shop_department, NULL, NULL, @gift_shop_employee, @mystery_plush_item, @gift_shop_user, 'Mystery Plush stocking (12 x 18).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 204, @gift_shop_department, NULL, NULL, @gift_shop_employee, @led_sword_item, @gift_shop_user, 'LED Sword stocking (17 x 12).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('gift_shop_inventory_procurement', @gift_shop_budget_account, @gift_shop_inventory_spend_account, 500, @gift_shop_department, NULL, NULL, @gift_shop_employee, NULL, @gift_shop_user, 'VIP Party Voucher stocking (125 x 4).', DATE_SUB(NOW(), INTERVAL 7 DAY)),
   ('manual_override', NULL, @alice_wallet_account, 180, NULL, @alice_attendee, NULL, @support_employee, NULL, @support_user, 'Imported member wallet balance for Alice.', DATE_SUB(NOW(), INTERVAL 6 DAY)),
   ('manual_override', NULL, @jordan_wallet_account, 130, NULL, @jordan_attendee, NULL, @support_employee, NULL, @support_user, 'Imported member wallet balance for Jordan.', DATE_SUB(NOW(), INTERVAL 5 DAY)),
   ('manual_override', NULL, @morgan_wallet_account, 420, NULL, @morgan_attendee, NULL, @support_employee, NULL, @support_user, 'Imported member wallet balance for Morgan.', DATE_SUB(NOW(), INTERVAL 4 DAY)),
@@ -283,8 +283,3 @@ VALUES
   (@arcade_tumbler_item, @gift_shop_department, @gift_shop_employee, @jordan_attendee, @session_jordan_pinball, @jordan_wallet_account, 1, 80, 'Jordan redeemed an Arcade Tumbler.', DATE_SUB(NOW(), INTERVAL 4 DAY)),
   (@led_sword_item, @gift_shop_department, @gift_shop_employee, @morgan_attendee, @session_morgan_tower, @morgan_wallet_account, 1, 400, 'Morgan redeemed an LED Sword.', DATE_SUB(NOW(), INTERVAL 2 DAY)),
   (@sticker_pack_item, @gift_shop_department, @gift_shop_employee, NULL, @session_claw, @session_claw_wallet, 1, 20, 'Claw walk-in redeemed stickers.', DATE_SUB(NOW(), INTERVAL 2 DAY));
-
--- Snapshot report.
-INSERT INTO revenue_reports (total_ticket_admissions, total_ticket_payouts, total_gift_shop_redemptions, total_owner_investment, active_attendees, start_date, end_date, generated_by)
-VALUES
-  (395, 630, 520, 2200, 3, DATE_SUB(CURDATE(), INTERVAL 7 DAY), CURDATE(), @owner_user);

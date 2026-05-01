@@ -113,6 +113,43 @@ final class Auth
     }
 
     /**
+     * Opens a session as the given user without verifying a password.
+     * Only intended for the development debug toolbar.
+     *
+     * @return array{user_id:int,name:string,email:string,role:string}|null
+     */
+    public static function loginAsUserIdForDebug(int $userId): ?array
+    {
+        if ($userId <= 0) {
+            return null;
+        }
+
+        self::ensureSessionStarted();
+
+        $pdo = Database::connect();
+        $stmt = $pdo->prepare('SELECT user_id, name, email, role FROM users WHERE user_id = :id AND pending_approval = 0 LIMIT 1');
+        $stmt->execute(['id' => $userId]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            return null;
+        }
+
+        session_regenerate_id(true);
+
+        $user = [
+            'user_id' => (int)$row['user_id'],
+            'name' => (string)$row['name'],
+            'email' => (string)$row['email'],
+            'role' => (string)$row['role'],
+        ];
+
+        $_SESSION['user'] = $user;
+
+        return $user;
+    }
+
+    /**
      * Creates a new user account and logs them in.
      *
      * @return array{user_id:int,name:string,email:string,role:string}|null

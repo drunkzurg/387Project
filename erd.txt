@@ -66,26 +66,6 @@ Table employee_sick_requests {
   review_notes varchar
 }
 
-// ========== EMPLOYEE HOURS ==========
-
-Table employee_hours {
-  log_id integer [primary key]
-  employee_id integer [not null]
-  date date
-  hours_worked float
-}
-
-// ========== EMPLOYEE TRANSFERS ==========
-
-Table employee_transfers {
-  transfer_id integer [primary key]
-  employee_id integer [not null]
-  from_department integer
-  to_department integer
-  date date
-  handled_by_user_id integer
-}
-
 // ========== HR ACTION LOGS ==========
 
 Table hr_action_logs {
@@ -108,7 +88,6 @@ Table attendees {
   is_member boolean
   verified_by_employee_id integer
   verified_at datetime
-  created_at datetime
 }
 
 // ========== ATTENDEE SESSIONS ==========
@@ -190,31 +169,11 @@ Table gift_shop_redemptions {
   redeemed_at datetime
 }
 
-// ========== REPORTS ==========
-
-Table revenue_reports {
-  report_id integer [primary key]
-  total_ticket_admissions integer
-  total_ticket_payouts integer
-  total_gift_shop_redemptions integer
-  total_owner_investment integer
-  active_attendees integer
-  start_date date
-  end_date date
-  generated_by integer
-  created_at datetime
-}
-
 Ref: employees.user_id > users.user_id
 Ref: employees.department_id > departments.department_id
 Ref: employee_shifts.employee_id > employees.employee_id
 Ref: employee_sick_requests.employee_id > employees.employee_id
 Ref: employee_sick_requests.reviewed_by_user_id > users.user_id
-Ref: employee_hours.employee_id > employees.employee_id
-Ref: employee_transfers.employee_id > employees.employee_id
-Ref: employee_transfers.from_department > departments.department_id
-Ref: employee_transfers.to_department > departments.department_id
-Ref: employee_transfers.handled_by_user_id > users.user_id
 Ref: hr_action_logs.employee_id > employees.employee_id
 Ref: hr_action_logs.handled_by_user_id > users.user_id
 Ref: attendees.verified_by_employee_id > employees.employee_id
@@ -238,4 +197,3 @@ Ref: gift_shop_redemptions.employee_id > employees.employee_id
 Ref: gift_shop_redemptions.attendee_id > attendees.attendee_id
 Ref: gift_shop_redemptions.attendee_session_id > attendee_sessions.session_id
 Ref: gift_shop_redemptions.source_account_id > ticket_accounts.ticket_account_id
-Ref: revenue_reports.generated_by > users.user_id

@@ -61,6 +61,10 @@ type Member = {
   name: string
   membershipCode: string
   walletBalance: number
+  email: string | null
+  phone: string | null
+  verifiedAt: string | null
+  verifiedByEmployeeName: string | null
 }
 
 type ActiveSession = {
@@ -474,7 +478,7 @@ export function EmployeeDashboard({
         />
       ) : null}
       {employee.departmentType === "customer_support" ? (
-        <CustomerSupportPanel claimCandidates={claimCandidates} />
+        <CustomerSupportPanel claimCandidates={claimCandidates} members={members} />
       ) : null}
       </>
       ) : null}
@@ -711,11 +715,71 @@ function GiftShopPanel({
   )
 }
 
-function CustomerSupportPanel({ claimCandidates }: { claimCandidates: ClaimCandidate[] }) {
+function CustomerSupportPanel({
+  claimCandidates,
+  members,
+}: {
+  claimCandidates: ClaimCandidate[]
+  members: Member[]
+}) {
   return (
-    <Section title="Customer Support Claims">
-      <Card>
-        <CardContent>
+    <>
+      <Section title="Members">
+        <Card>
+          <CardHeader>
+            <CardTitle>All members</CardTitle>
+            <CardDescription>
+              Verified members with contact info, wallet balance, and verification details.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {members.length === 0 ? (
+              <p className="m-0 text-muted-foreground">No members on file yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead className="text-right">Wallet</TableHead>
+                      <TableHead>Verified</TableHead>
+                      <TableHead>Verified by</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {members.map((member) => (
+                      <TableRow key={member.attendeeId}>
+                        <TableCell className="font-heading">{member.name}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {member.membershipCode || "—"}
+                        </TableCell>
+                        <TableCell>{member.email?.trim() ? member.email : "—"}</TableCell>
+                        <TableCell>{member.phone?.trim() ? member.phone : "—"}</TableCell>
+                        <TableCell className="text-right font-heading">
+                          {number(member.walletBalance)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {member.verifiedAt
+                            ? new Date(member.verifiedAt).toLocaleString()
+                            : "—"}
+                        </TableCell>
+                        <TableCell>{member.verifiedByEmployeeName ?? "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </Section>
+
+      <Section title="Customer Support Claims">
+        <Card>
+          <CardContent>
           {claimCandidates.length === 0 ? (
             <p className="m-0 text-muted-foreground">No claimable sessions are waiting for verification.</p>
           ) : (
@@ -747,5 +811,6 @@ function CustomerSupportPanel({ claimCandidates }: { claimCandidates: ClaimCandi
         </CardContent>
       </Card>
     </Section>
+    </>
   )
 }

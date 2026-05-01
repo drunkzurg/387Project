@@ -419,12 +419,18 @@ if ($employee) {
         "SELECT
             a.attendee_id,
             a.name,
+            a.email,
+            a.phone,
             a.membership_code,
-            COALESCE(wallet.balance, 0) AS wallet_balance
+            COALESCE(wallet.balance, 0) AS wallet_balance,
+            a.verified_at,
+            verifier.name AS verified_by_employee_name
          FROM attendees a
          LEFT JOIN ticket_accounts wallet
             ON wallet.attendee_id = a.attendee_id
            AND wallet.account_kind = 'member_wallet'
+         LEFT JOIN employees verifier
+            ON verifier.employee_id = a.verified_by_employee_id
          WHERE a.is_member = 1
          ORDER BY a.name"
     )->fetchAll();
@@ -633,8 +639,14 @@ $frontendProps = [
         static fn(array $member): array => [
             'attendeeId' => (int)$member['attendee_id'],
             'name' => (string)$member['name'],
+            'email' => $member['email'] !== null ? (string)$member['email'] : null,
+            'phone' => $member['phone'] !== null ? (string)$member['phone'] : null,
             'membershipCode' => (string)($member['membership_code'] ?? ''),
             'walletBalance' => (int)$member['wallet_balance'],
+            'verifiedAt' => $member['verified_at'] !== null ? (string)$member['verified_at'] : null,
+            'verifiedByEmployeeName' => $member['verified_by_employee_name'] !== null
+                ? (string)$member['verified_by_employee_name']
+                : null,
         ],
         $members
     ),
@@ -1101,6 +1113,35 @@ $frontendProps = [
     <?php endif; ?>
 
     <?php if ($employee['department_type'] === 'customer_support'): ?>
+      <h2>Members</h2>
+      <p>All verified members in the system.</p>
+      <?php if ($members === []): ?>
+        <p>No members on file yet.</p>
+      <?php else: ?>
+        <table border="1" cellpadding="6" style="border-collapse: collapse; width: 100%;">
+          <tr>
+            <th>Name</th>
+            <th>Membership code</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Wallet (tickets)</th>
+            <th>Verified</th>
+            <th>Verified by</th>
+          </tr>
+          <?php foreach ($members as $member): ?>
+            <tr>
+              <td><?php echo $escape((string)$member['name']); ?></td>
+              <td><?php echo $escape((string)($member['membership_code'] ?? '')); ?></td>
+              <td><?php echo $escape((string)($member['email'] ?? '')); ?></td>
+              <td><?php echo $escape((string)($member['phone'] ?? '')); ?></td>
+              <td><?php echo number_format((int)$member['wallet_balance']); ?></td>
+              <td><?php echo $member['verified_at'] !== null ? $escape($formatDateTime((string)$member['verified_at'])) : '—'; ?></td>
+              <td><?php echo $escape((string)($member['verified_by_employee_name'] ?? '—')); ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </table>
+      <?php endif; ?>
+
       <h2>Customer Support Claims</h2>
       <p>Convert walk-in session balances into verified member wallets after reviewing the ticket claim.</p>
       <?php if ($claimCandidates === []): ?>

@@ -88,46 +88,6 @@ CREATE TABLE IF NOT EXISTS employee_sick_requests (
     ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 005_create_employee_hours.sql
-CREATE TABLE IF NOT EXISTS employee_hours (
-  log_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  employee_id INT UNSIGNED NOT NULL,
-  `date` DATE NOT NULL,
-  hours_worked DECIMAL(5,2) NOT NULL,
-  PRIMARY KEY (log_id),
-  UNIQUE KEY uq_employee_hours_day (employee_id, `date`),
-  CONSTRAINT fk_hours_employee
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
-    ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 006_create_employee_transfers.sql
-CREATE TABLE IF NOT EXISTS employee_transfers (
-  transfer_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  employee_id INT UNSIGNED NOT NULL,
-  from_department INT UNSIGNED NULL,
-  to_department INT UNSIGNED NULL,
-  `date` DATE NOT NULL,
-  handled_by_user_id INT UNSIGNED NOT NULL,
-  PRIMARY KEY (transfer_id),
-  KEY idx_transfers_employee (employee_id),
-  KEY idx_transfers_from (from_department),
-  KEY idx_transfers_to (to_department),
-  KEY idx_transfers_handler (handled_by_user_id),
-  CONSTRAINT fk_transfers_employee
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
-    ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT fk_transfers_from_department
-    FOREIGN KEY (from_department) REFERENCES departments(department_id)
-    ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT fk_transfers_to_department
-    FOREIGN KEY (to_department) REFERENCES departments(department_id)
-    ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT fk_transfers_handler
-    FOREIGN KEY (handled_by_user_id) REFERENCES users(user_id)
-    ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 -- 006b_create_hr_action_logs.sql
 CREATE TABLE IF NOT EXISTS hr_action_logs (
   hr_action_log_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -158,7 +118,6 @@ CREATE TABLE IF NOT EXISTS attendees (
   is_member TINYINT(1) NOT NULL DEFAULT 0,
   verified_by_employee_id INT UNSIGNED NULL,
   verified_at DATETIME NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (attendee_id),
   UNIQUE KEY uq_attendees_email (email),
   UNIQUE KEY uq_attendees_membership_code (membership_code),
@@ -345,25 +304,5 @@ CREATE TABLE IF NOT EXISTS gift_shop_redemptions (
     ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT fk_gift_shop_redemptions_source
     FOREIGN KEY (source_account_id) REFERENCES ticket_accounts(ticket_account_id)
-    ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 013_create_revenue_reports.sql
-CREATE TABLE IF NOT EXISTS revenue_reports (
-  report_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  total_ticket_admissions BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  total_ticket_payouts BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  total_gift_shop_redemptions BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  total_owner_investment BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  active_attendees INT UNSIGNED NOT NULL DEFAULT 0,
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-  generated_by INT UNSIGNED NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (report_id),
-  KEY idx_reports_dates (start_date, end_date),
-  KEY idx_reports_generated_by (generated_by),
-  CONSTRAINT fk_reports_generated_by
-    FOREIGN KEY (generated_by) REFERENCES users(user_id)
     ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
