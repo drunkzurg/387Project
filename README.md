@@ -41,6 +41,3 @@ Generate a bcrypt hash for a password:
 - `echo -n "password" | php scripts/hash_password.php -`
 
 https://turing.cs.olemiss.edu/~bpaudel2/387Project/public/index.php?db_test=1
-
-## Next
-You’ll provide the next instructions; we’ll build auth + role-based pages on top of the ERD schema.
