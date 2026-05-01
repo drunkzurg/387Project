@@ -1,4 +1,5 @@
 <?php
+// owner dashboard: ticket economy overview, department crud, owner investment credits — posts redirect back here
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Database/Database.php';
 require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
@@ -24,6 +25,7 @@ $flash = $_SESSION['owner_dashboard_flash'] ?? null;
 $error = $_SESSION['owner_dashboard_error'] ?? null;
 unset($_SESSION['owner_dashboard_flash'], $_SESSION['owner_dashboard_error']);
 
+// presentation helpers for fallback html + chart labels
 $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $departmentLabel = static function (string $type): string {
     return match ($type) {
@@ -46,6 +48,7 @@ $availabilityLabel = static function (array $department): string {
     return (int)$department['active_attendees'] >= (int)$department['capacity'] ? 'Waitlist' : 'Open';
 };
 
+// ticketservice wraps ledger-safe department + investment operations
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $action = (string)($_POST['action'] ?? '');
@@ -106,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+// headline balances pulled from ticket_accounts kinds owner cares about
 $summary = [
     'gift_shop_budget' => 0,
     'gift_shop_revenue' => 0,
@@ -332,6 +336,7 @@ $investmentRowsStmt->execute();
 $investmentLogs = $investmentRowsStmt->fetchAll();
 
 $departmentColors = ['#e3337e', '#b82063', '#ff6aa7', '#8f174d', '#f0a0c1', '#c6427d', '#6f123c'];
+// react bundle — charts expect stable department keys + trend arrays computed above
 $frontendProps = [
     'currentUser' => [
         'name' => (string)$user['name'],

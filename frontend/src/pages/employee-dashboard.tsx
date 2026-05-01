@@ -1,3 +1,4 @@
+// employee dashboard: clock in/out, shifts, sick requests; department tools vary by department_type (play_area / gift_shop / customer_support).
 import { useEffect, useState } from "react"
 
 import { DashboardShell, ResponsiveGrid, Section } from "@/components/layout"
@@ -19,6 +20,7 @@ import {
   buttonClasses,
 } from "@/components/ui"
 
+// logged-in user's employee row + department ticket balances from php
 type EmployeeInfo = {
   employeeId: number
   name: string
@@ -122,6 +124,7 @@ type ClaimCandidate = {
   walletBalance: number
 }
 
+// json bootstrap from employee_dashboard.php — sparse props depend on department_type
 export type EmployeeDashboardProps = {
   currentUser: {
     name: string
@@ -161,6 +164,7 @@ const inputClass =
 const textInputClass =
   "min-h-20 rounded-base border-2 border-border bg-secondary-background px-3 py-2 font-sans text-sm font-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 
+// prettify enum-like strings for ui labels
 function labelize(value: string) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
@@ -169,6 +173,7 @@ function number(value: number) {
   return value.toLocaleString()
 }
 
+// live duration display for open shift (quarter-hour granularity)
 function quarterHoursSince(value: string) {
   const startedAt = new Date(value).getTime()
   if (Number.isNaN(startedAt)) {
@@ -176,9 +181,10 @@ function quarterHoursSince(value: string) {
   }
 
   const hours = Math.max((Date.now() - startedAt) / 36e5, 0)
-  return (Math.floor(hours * 4) / 4).toFixed(2)
+  return (Math.floor(hours * 4) / 4).toFixed(2  )
 }
 
+// shared form label wrapper for department action posts
 function Field({
   children,
   label,
@@ -194,6 +200,7 @@ function Field({
   )
 }
 
+// sick / employment status chip colors
 function StatusBadge({ status }: { status: string }) {
   const variant = status === "approved" || status === "active" ? "success" : status === "denied" || status === "terminated" ? "danger" : "warning"
 
@@ -221,11 +228,13 @@ export function EmployeeDashboard({
   claimCandidates,
 }: EmployeeDashboardProps) {
   const [showShifts, setShowShifts] = useState(false)
+  // toggle between personal hr stats vs department operations
   const [activeMode, setActiveMode] = useState<"employee" | "department">("employee")
   const [liveShiftHours, setLiveShiftHours] = useState(
     openLiveShift ? quarterHoursSince(openLiveShift.startTime) : "0.00",
   )
 
+  // employee theme variables only while mounted
   useEffect(() => {
     document.documentElement.classList.add("ams-employee-theme")
 
@@ -234,6 +243,7 @@ export function EmployeeDashboard({
     }
   }, [])
 
+  // refresh displayed hours every minute while clocked in
   useEffect(() => {
     if (!openLiveShift) {
       setLiveShiftHours("0.00")
@@ -247,6 +257,7 @@ export function EmployeeDashboard({
     return () => window.clearInterval(timer)
   }, [openLiveShift])
 
+  // user account exists but hr has not created an employees row yet
   if (!employee) {
     return (
       <DashboardShell
@@ -296,6 +307,7 @@ export function EmployeeDashboard({
       roleLabel={`Logged in as ${currentUser.name}`}
       title="Employee Dashboard"
     >
+      {/* flash / error messages from php post redirects */}
       {flash ? (
         <Card className="bg-success">
           <CardTitle>{flash}</CardTitle>
@@ -307,6 +319,7 @@ export function EmployeeDashboard({
         </Card>
       ) : null}
 
+      {/* switch personal hr tools vs department ticket/session tools */}
       <div className="mx-auto flex w-full max-w-xl gap-3 rounded-base border-2 border-border bg-secondary-background p-3 shadow-shadow">
         <Button
           onClick={() => setActiveMode("employee")}
@@ -328,6 +341,7 @@ export function EmployeeDashboard({
 
       {activeMode === "employee" ? (
       <Section title="Employee">
+        {/* wage stats, manual shifts, shift history, sick requests */}
         <ResponsiveGrid>
           <StatCard detail="Hourly wage" label="Wage" value={`$${employee.hourlyWage.toFixed(2)}`} />
           <StatCard detail="Assigned department" label="Department" value={employee.departmentName} />
@@ -442,6 +456,7 @@ export function EmployeeDashboard({
 
       {activeMode === "department" ? (
       <>
+      {/* department reserves / budgets — varies by department_type */}
       <Section title="Department">
         <ResponsiveGrid>
           <StatCard detail="Department type" label="Type" value={employee.departmentLabel} />
@@ -464,9 +479,11 @@ export function EmployeeDashboard({
         </ResponsiveGrid>
       </Section>
 
+      {/* play floor: open/close sessions */}
       {employee.departmentType === "play_area" ? (
-        <PlayAreaPanel activeSessions={activeSessions} members={members} recentSessions={recentSessions} />
+        <PlayAreaPanel activeSessions={activeSessions} members={members} recentSessions={recentSessions}         />
       ) : null}
+      {/* gift shop: catalog, redeem, budgets */}
       {employee.departmentType === "gift_shop" ? (
         <GiftShopPanel
           budget={giftShopBudgetAvailable}
@@ -477,6 +494,7 @@ export function EmployeeDashboard({
           walletSources={walletSources}
         />
       ) : null}
+      {/* customer support: member directory + session claim verification */}
       {employee.departmentType === "customer_support" ? (
         <CustomerSupportPanel claimCandidates={claimCandidates} members={members} />
       ) : null}
@@ -486,6 +504,7 @@ export function EmployeeDashboard({
   )
 }
 
+// play-area staff: start attendee sessions, close with payout, history
 function PlayAreaPanel({
   activeSessions,
   members,
@@ -605,6 +624,7 @@ function PlayAreaPanel({
   )
 }
 
+// gift shop staff: catalog crud, redeem against member/session wallets
 function GiftShopPanel({
   budget,
   inventorySpend,
@@ -715,6 +735,7 @@ function GiftShopPanel({
   )
 }
 
+// support staff: roster + convert closed session wallets into member accounts
 function CustomerSupportPanel({
   claimCandidates,
   members,

@@ -1,4 +1,5 @@
 <?php
+// sys_admin only: approve pending users, optionally stub employees row, delete approved accounts
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Database/Database.php';
 require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
@@ -18,11 +19,12 @@ if (!$currentUser || $currentUser['role'] !== 'sys_admin') {
 
 $pdo = Database::connect();
 
+// pull flash messages set by prior post/redirect cycle
 $flash = $_SESSION['admin_dashboard_flash'] ?? null;
 $error = $_SESSION['admin_dashboard_error'] ?? null;
 unset($_SESSION['admin_dashboard_flash'], $_SESSION['admin_dashboard_error']);
 
-// Handle approval/rejection actions
+// post/redirect/get — approve | reject | delete_existing
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['action'])) {
     $userId = (int)$_POST['user_id'];
 
@@ -30,16 +32,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
       if ($_POST['action'] === 'approve') {
         $stmt = $pdo->prepare('UPDATE users SET pending_approval = 0 WHERE user_id = :user_id');
         $stmt->execute(['user_id' => $userId]);
-        // Check if user needs an employee record
+        // provision stub employees row when approving staff-facing roles (hr fills details later)
         $userRow = $pdo->prepare('SELECT user_id, name, role FROM users WHERE user_id = :user_id');
         $userRow->execute(['user_id' => $userId]);
         $userData = $userRow->fetch();
         if ($userData && in_array($userData['role'], ['employee', 'owner', 'hr'], true)) {
-          // Only create if not already present
+          // skip insert when hr already linked this user
           $check = $pdo->prepare('SELECT employee_id FROM employees WHERE user_id = :user_id');
           $check->execute(['user_id' => $userId]);
           if (!$check->fetch()) {
-            // Assign to first department by default (can be changed by HR later)
+            // default department is lowest id until hr reassigns
             $dept = $pdo->query('SELECT department_id FROM departments ORDER BY department_id ASC LIMIT 1')->fetch();
             $departmentId = $dept ? $dept['department_id'] : null;
             $insert = $pdo->prepare('INSERT INTO employees (user_id, name, department_id, hourly_wage, status) VALUES (:user_id, :name, :department_id, 15.00, "active")');
@@ -72,13 +74,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
     exit;
 }
 
-// Fetch all pending users
+// pending registration queue + approved directory for react props / fallback tables
 $stmt = $pdo->query('SELECT user_id, name, email, role, pending_approval FROM users WHERE pending_approval = 1 ORDER BY user_id ASC');
 $pendingUsers = $stmt->fetchAll();
 
 $existingStmt = $pdo->query('SELECT user_id, name, email, role, pending_approval FROM users WHERE pending_approval = 0 ORDER BY FIELD(role, "sys_admin", "owner", "hr", "employee"), name ASC');
 $existingUsers = $existingStmt->fetchAll();
 
+// normalize rows for admin-dashboard.tsx + highlight current admin in delete guard
 $mapUser = static function (array $user) use ($currentUser): array {
     return [
       'userId' => (int)$user['user_id'],
@@ -90,6 +93,7 @@ $mapUser = static function (array $user) use ($currentUser): array {
     ];
 };
 
+// vite bootstrap payload
 $frontendProps = [
   'currentUser' => [
     'name' => (string)$currentUser['name'],

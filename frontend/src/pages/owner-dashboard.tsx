@@ -1,3 +1,4 @@
+// owner dashboard: ticket economy summary, department trends, create/edit departments, credit investments.
 import { useEffect, useMemo, useState } from "react"
 import { Pencil } from "lucide-react"
 import {
@@ -33,6 +34,7 @@ import {
   useChartConfig,
 } from "@/components/ui"
 
+// headline counters from consolidated ticket accounts
 type OwnerSummary = {
   credits: number
   circulation: number
@@ -91,6 +93,7 @@ type InvestmentLog = {
   note: string
 }
 
+// embedded json from owner_dashboard.php
 export type OwnerDashboardProps = {
   currentUser: {
     name: string
@@ -106,6 +109,7 @@ export type OwnerDashboardProps = {
   investmentLogs: InvestmentLog[]
 }
 
+// prettify enums for tables and badges
 function labelize(value: string) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
@@ -114,6 +118,7 @@ function number(value: number) {
   return value.toLocaleString()
 }
 
+// shared labeled inputs for investment + department modals
 function Field({
   children,
   label,
@@ -134,6 +139,7 @@ const inputClass =
 const textInputClass =
   "min-h-24 rounded-base border-2 border-border bg-secondary-background px-3 py-2 font-sans text-sm font-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 
+// custom recharts tooltip — shows generated vs payout splits per department line
 function DepartmentTrendTooltip({
   active,
   label,
@@ -188,6 +194,7 @@ function DepartmentTrendTooltip({
   )
 }
 
+// dialog chrome for create/update department + investment forms
 function ModalShell({
   children,
   onClose,
@@ -221,6 +228,7 @@ function ModalShell({
   )
 }
 
+// shared fields for create_department / update_department posts
 function DepartmentFields({
   department,
 }: {
@@ -310,6 +318,7 @@ export function OwnerDashboard({
   const [isInvestmentOpen, setIsInvestmentOpen] = useState(false)
   const [editingDepartment, setEditingDepartment] = useState<OwnerDepartment | null>(null)
 
+  // owner theme variables only while mounted
   useEffect(() => {
     document.documentElement.classList.add("ams-owner-theme")
 
@@ -318,6 +327,7 @@ export function OwnerDashboard({
     }
   }, [])
 
+  // line colors for department trend chart — derived from php-provided department.color
   const departmentChartConfig = useMemo<ChartConfig>(
     () =>
       Object.fromEntries(
@@ -331,6 +341,7 @@ export function OwnerDashboard({
       ),
     [departments],
   )
+  // activity sparkline uses a single signed ticket series
   const activityConfig: ChartConfig = {
     value: {
       color: "#e3337e",
@@ -356,6 +367,7 @@ export function OwnerDashboard({
         roleLabel={`Logged in as ${currentUser.name}`}
         title="Owner Dashboard"
       >
+        {/* flash / error from php redirects */}
         {flash ? (
           <Card className="bg-success">
             <CardTitle>{flash}</CardTitle>
@@ -367,6 +379,7 @@ export function OwnerDashboard({
           </Card>
         ) : null}
 
+        {/* headline balances + owner investment history */}
         <Section title="Ticket Summary">
           <ResponsiveGrid>
             <StatCard detail="Available owner-backed ticket credits" label="Credits" value={number(summary.credits)} />
@@ -415,6 +428,7 @@ export function OwnerDashboard({
           </Card>
         </Section>
 
+        {/* weekly net tickets per department line */}
         <Section
           description="Net tickets are generated tickets minus tickets given out by each department."
           title="Per Week Department Summary"
@@ -439,6 +453,7 @@ export function OwnerDashboard({
           </ChartContainer>
         </Section>
 
+        {/* department roster + edit pencil opens update_department */}
         <Section
           actions={<Button onClick={() => setIsCreateOpen(true)}>Create Department</Button>}
           title="Department Controls"
@@ -489,6 +504,7 @@ export function OwnerDashboard({
           </Card>
         </Section>
 
+        {/* signed ticket ledger samples: chart + detail table */}
         <Section description="Signed raw ticket transactions from the last two weeks." title="Ticket Activity">
           <ChartContainer config={activityConfig}>
             <LineChart data={activityChart} margin={{ bottom: 8, left: 8, right: 16, top: 16 }}>
@@ -541,6 +557,7 @@ export function OwnerDashboard({
         </Section>
       </DashboardShell>
 
+      {/* create_department form */}
       {isCreateOpen ? (
         <ModalShell onClose={() => setIsCreateOpen(false)} title="Create Department">
           <form action="owner_dashboard.php" className="grid gap-4" method="post">
@@ -551,6 +568,7 @@ export function OwnerDashboard({
         </ModalShell>
       ) : null}
 
+      {/* update_department — DepartmentFields picks correct input names for edit vs create */}
       {editingDepartment ? (
         <ModalShell onClose={() => setEditingDepartment(null)} title={`Update ${editingDepartment.name}`}>
           <form action="owner_dashboard.php" className="grid gap-4" method="post">
@@ -562,6 +580,7 @@ export function OwnerDashboard({
         </ModalShell>
       ) : null}
 
+      {/* add_investment — increases owner credit pool */}
       {isInvestmentOpen ? (
         <ModalShell onClose={() => setIsInvestmentOpen(false)} title="Increase Investment">
           <form action="owner_dashboard.php" className="grid gap-4" method="post">

@@ -1,4 +1,5 @@
 <?php
+// hr dashboard: employee crud, sick approvals, shifts, weekly aggregates — bootstraps hr tables if missing
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Database/Database.php';
 require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
@@ -17,6 +18,7 @@ if (!$user || $user['role'] !== 'hr') {
 }
 $pdo = Database::connect();
 TicketService::ensureInfrastructure($pdo);
+// lightweight migrations for teaching deployments (safe create/alter if not already migrated)
 $pdo->exec(
     "CREATE TABLE IF NOT EXISTS hr_action_logs (
         hr_action_log_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -58,6 +60,7 @@ $flash = $_SESSION['hr_dashboard_flash'] ?? null;
 $error = $_SESSION['hr_dashboard_error'] ?? null;
 unset($_SESSION['hr_dashboard_flash'], $_SESSION['hr_dashboard_error']);
 
+// audit helper for hr_action_logs inserts on mutating actions
 $logHrAction = static function (string $actionType, ?int $employeeId, string $details = '') use ($pdo, $user): void {
     $stmt = $pdo->prepare(
         'INSERT INTO hr_action_logs (action_type, employee_id, handled_by_user_id, details)
@@ -71,6 +74,7 @@ $logHrAction = static function (string $actionType, ?int $employeeId, string $de
     ]);
 };
 
+// all hr mutations funnel through action=... posts then redirect-with-flash
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $action = (string)($_POST['action'] ?? '');
@@ -229,6 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+// read path: employees + weekly shift aggregation + sick approvals + audit log for react props
 // Fetch all employees with department info
 $employees = $pdo->query(
     'SELECT
@@ -347,6 +352,7 @@ $sickRequests = $pdo->query(
      ORDER BY FIELD(sr.status, 'waiting', 'approved', 'denied'), sr.request_date DESC"
 )->fetchAll();
 
+// props bundle for hr-dashboard.tsx — heavy shaping for weekly charts per employee
 $frontendProps = [
     'currentUser' => [
         'name' => (string)$user['name'],

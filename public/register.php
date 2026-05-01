@@ -1,5 +1,6 @@
 <?php
 
+// registers a users row with pending_approval; redirects into session briefly then index (legacy html form)
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
 
@@ -19,6 +20,7 @@ $error = null;
 $name = '';
 $email = '';
 
+// validates fields then Auth::register — unlike spa flow this keeps user logged in until redirect
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $name = (string)($_POST['name'] ?? '');
   $email = (string)($_POST['email'] ?? '');

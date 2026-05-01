@@ -1,5 +1,6 @@
 <?php
 
+// fallback login page for users without js; mirrors auth_modal validation then redirects by role
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
 
@@ -18,6 +19,7 @@ if ($currentUser !== null) {
 $error = null;
 $email = '';
 
+// classic form post — same credentials path as auth_modal login action
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = (string)($_POST['email'] ?? '');
     $password = (string)($_POST['password'] ?? '');
@@ -26,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($user === 'pending_approval') {
       $error = 'Your account is pending admin approval. Please wait for an administrator to approve your registration.';
     } elseif ($user !== null) {
-      // Redirect to dashboard based on role
+      // redirect by role (same routing table as auth_modal.php)
       if ($user['role'] === 'sys_admin') {
         header('Location: admin_dashboard.php');
       } elseif ($user['role'] === 'owner') {

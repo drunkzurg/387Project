@@ -1,3 +1,4 @@
+// admin dashboard: approve or reject new staff signups, browse approved accounts, delete users (forms post to admin_dashboard.php).
 import { useEffect, useState } from "react"
 
 import { DashboardShell, Section } from "@/components/layout"
@@ -18,6 +19,7 @@ import {
   buttonClasses,
 } from "@/components/ui"
 
+// row shape from php props for the user directory tables
 type AdminAccount = {
   userId: number
   name: string
@@ -38,10 +40,12 @@ export type AdminDashboardProps = {
   existingUsers: AdminAccount[]
 }
 
+// human-readable role enum for badges
 function roleLabel(role: string) {
   return role.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
+// single approve/reject submit — button name/value carries the action for classic form posts
 function AccountActionForm({
   action,
   user,
@@ -71,6 +75,7 @@ export function AdminDashboard({
   const [isExistingOpen, setIsExistingOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<AdminAccount | null>(null)
 
+  // scope css variables for admin chrome only while this page is mounted
   useEffect(() => {
     document.documentElement.classList.add("ams-admin-theme")
 
@@ -96,6 +101,7 @@ export function AdminDashboard({
         roleLabel={`Logged in as ${currentUser.name}`}
         title="Admin Dashboard"
       >
+        {/* flash / error banners from server redirects */}
         {flash ? (
           <Card className="bg-success">
             <CardTitle>{flash}</CardTitle>
@@ -107,6 +113,7 @@ export function AdminDashboard({
           </Card>
         ) : null}
 
+        {/* registration queue — posts approve/reject per row */}
         <Section
           description="Approve staff accounts into the system or reject requests that should not proceed."
           title="Pending Accounts"
@@ -160,6 +167,7 @@ export function AdminDashboard({
           </Card>
         </Section>
 
+        {/* collapsible directory of approved accounts; delete opens confirm modal */}
         <Section title="Existing Accounts">
           <Card>
             <button
@@ -227,6 +235,7 @@ export function AdminDashboard({
         </Section>
       </DashboardShell>
 
+      {/* confirm destructive delete — posts delete_existing */}
       {deleteTarget ? (
         <div
           aria-labelledby="delete-account-title"

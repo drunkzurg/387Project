@@ -1,4 +1,5 @@
 <?php
+// employee dashboard: shifts, sick requests, and department-specific ticket/session workflows for logged-in staff
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Database/Database.php';
 require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
@@ -20,6 +21,7 @@ if (!$user || $user['role'] !== 'employee') {
 $pdo = Database::connect();
 TicketService::ensureInfrastructure($pdo);
 
+// join employees → departments → departmental ticket pools for header stats + department mode
 $employeeStmt = $pdo->prepare(
     "SELECT
         e.employee_id,
@@ -60,6 +62,7 @@ unset($_SESSION['employee_dashboard_flash'], $_SESSION['employee_dashboard_error
 $startValue = '';
 $endValue = '';
 
+// html escaping + human-readable timestamps for fallback markup
 $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $formatDateTime = static function (?string $value): string {
     if ($value === null || $value === '') {
@@ -84,6 +87,7 @@ $departmentLabel = static function (?string $type): string {
 };
 $statusLabel = static fn(string $status): string => str_replace('_', ' ', ucfirst($status));
 
+// large switch: hr-style shift tools + TicketService entry points per department_type
 if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if ($employee['status'] === 'terminated') {
@@ -324,6 +328,7 @@ if ($employee && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+// default props when employee row missing or before aggregation runs
 $summary = [
     'today_minutes' => 0,
     'week_minutes' => 0,
@@ -344,6 +349,7 @@ $openLiveShift = null;
 $sickRequests = [];
 $approvedSickDaysThisWeek = 0;
 
+// hydrate dashboard props when hr linked an employee profile to this user
 if ($employee) {
     $durationExpr = 'CASE WHEN end_time > start_time THEN TIMESTAMPDIFF(MINUTE, start_time, end_time) ELSE 0 END';
 
@@ -575,6 +581,7 @@ if ($employee) {
     }
 }
 
+// normalized shift rows for employee-dashboard.tsx tables
 $mapShift = static function (array $shift) use ($formatDateTime, $formatHours): array {
     return [
         'shiftId' => (int)$shift['shift_id'],
@@ -588,6 +595,7 @@ $mapShift = static function (array $shift) use ($formatDateTime, $formatHours): 
     ];
 };
 
+// sparse arrays (gift shop, play area, support) are filled only when employee department matches
 $frontendProps = [
     'currentUser' => [
         'name' => (string)$user['name'],

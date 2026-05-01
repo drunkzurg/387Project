@@ -1,4 +1,5 @@
 <?php
+// public home + react spa mount: live play-area query, optional logged-in user props for header links
 require_once __DIR__ . '/../src/Database/Database.php';
 require_once __DIR__ . '/../src/Auth/Auth.php';
 require_once __DIR__ . '/../src/Debug/DebugToolbar.php';
@@ -6,6 +7,7 @@ require_once __DIR__ . '/../src/View/FrontendAssets.php';
 
 debugToolbarHandleRequest();
 
+// plain-text health probe for deployment scripts (?db_test=1)
 if (isset($_GET['db_test']) && $_GET['db_test'] === '1') {
 	header('Content-Type: text/plain; charset=utf-8');
 	try {
@@ -23,7 +25,9 @@ http_response_code(200);
 header('Content-Type: text/html; charset=utf-8');
 
 $user = Auth::user();
+// helpers reused by react props + noscript fallback table
 $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+// picks dashboard php target when staff user is logged in
 $dashboardPath = static function (?array $user): ?string {
 	if ($user === null) {
 		return null;
@@ -45,6 +49,7 @@ $pdoError = null;
 try {
 	$pdo = Database::connect();
 
+	// staff pending flag hides dashboard links until admin approves
 	if ($user !== null) {
 		$stmt = $pdo->prepare('SELECT pending_approval FROM users WHERE user_id = :uid LIMIT 1');
 		$stmt->execute(['uid' => $user['user_id']]);
@@ -75,6 +80,7 @@ try {
 	$pdoError = 'Live department availability is temporarily unavailable.';
 }
 
+// derive waitlist / open labels from operating_status + live session counts
 $departmentAvailability = static function (array $department): array {
 	$status = (string)$department['operating_status'];
 	$activeAttendees = (int)$department['active_attendees'];
@@ -98,6 +104,7 @@ $departmentAvailability = static function (array $department): array {
 	];
 };
 
+// maps sql rows into camelCase props for public-home.tsx
 $frontendPlayAreas = array_map(
 	static function (array $department) use ($departmentAvailability): array {
 		$availability = $departmentAvailability($department);
@@ -118,6 +125,7 @@ $frontendPlayAreas = array_map(
 	$playAreas
 );
 
+// serialized into <script type="application/json"> for vite react hydration
 $frontendProps = [
 	'user' => $user !== null ? [
 		'name' => (string)$user['name'],
@@ -139,7 +147,9 @@ $frontendProps = [
 <body>
 	<?php echo debugToolbarRender($user); ?>
 	<?php echo frontendJsonScript('public-home-props', $frontendProps); ?>
+	<!-- react root -->
 	<div id="public-home-root" data-react-page="publicHome" data-props-id="public-home-props"></div>
+	<!-- minimal markup when js is disabled -->
 	<div class="ams-fallback">
 	<h1>Arcade Management System</h1>
 	<p>Check live department availability before you head to the counter.</p>

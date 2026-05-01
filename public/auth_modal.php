@@ -1,5 +1,6 @@
 <?php
 
+// json endpoint used by the spa login/register modal on index.php (posts to same-origin auth_modal.php)
 require_once __DIR__ . '/../src/Auth/Auth.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
@@ -8,6 +9,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 
 header('Content-Type: application/json; charset=utf-8');
 
+// maps user.role to the php dashboard entry script after login
 $dashboardPath = static function (string $role): string {
     return match ($role) {
         'sys_admin' => 'admin_dashboard.php',
@@ -18,6 +20,7 @@ $dashboardPath = static function (string $role): string {
     };
 };
 
+// uniform json exit helper for validation / auth failures
 $respond = static function (array $payload, int $statusCode = 200): void {
     http_response_code($statusCode);
     echo json_encode($payload, JSON_THROW_ON_ERROR);
@@ -28,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     $respond(['ok' => false, 'message' => 'Unsupported request method.'], 405);
 }
 
+// spa sends action=login | register from hidden field
 $action = (string)($_POST['action'] ?? '');
 
 if ($action === 'login') {
@@ -55,6 +59,7 @@ if ($action === 'login') {
     ]);
 }
 
+// registers staff account then logs out so approval queue stays enforced (pending_approval)
 if ($action === 'register') {
     $name = (string)($_POST['name'] ?? '');
     $email = (string)($_POST['email'] ?? '');
@@ -88,4 +93,5 @@ if ($action === 'register') {
     ]);
 }
 
+// fallback when action is missing or typo’d
 $respond(['ok' => false, 'message' => 'Unknown auth action.'], 400);

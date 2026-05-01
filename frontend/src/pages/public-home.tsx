@@ -1,3 +1,4 @@
+// public landing: live play-area stats, member wallet lookup (member_wallet_lookup.php), staff auth modal (auth_modal.php).
 import { useState, type FormEvent } from "react"
 
 import { PageShell, ResponsiveGrid, Section } from "@/components/layout"
@@ -14,6 +15,7 @@ import {
   buttonClasses,
 } from "@/components/ui"
 
+// availability badge label from server (open / waitlist / etc.)
 type Availability = {
   label: string
   detail: string
@@ -42,6 +44,7 @@ export type PublicHomeProps = {
   playAreas: PlayArea[]
 }
 
+// maps badge variant for play-area status chips
 function statusVariant(label: string) {
   if (label === "Open") {
     return "success" as const
@@ -53,6 +56,7 @@ function statusVariant(label: string) {
   return "warning" as const
 }
 
+// ledger enum → short labels for the wallet transaction table
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   department_admission: "Play-area admission",
   department_payout: "Play-area payout",
@@ -68,6 +72,7 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
 
 type AuthMode = "login" | "register"
 
+// rows returned by member_wallet_lookup api
 type WalletTransactionRow = {
   ticketTransactionId: number
   transactionType: string
@@ -101,6 +106,7 @@ type AuthResponse = {
   dashboardPath?: string
 }
 
+// embedded props come from index.php (availability query + optional logged-in user summary)
 export function PublicHome({
   user,
   dashboardPath,
@@ -123,6 +129,7 @@ export function PublicHome({
   const activeCount = playAreas.reduce((total, area) => total + area.activeAttendees, 0)
   const capacityCount = playAreas.reduce((total, area) => total + area.capacity, 0)
 
+  // staff login/register via auth_modal.php; successful login redirects to role dashboard
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -158,6 +165,7 @@ export function PublicHome({
     setIsLoginOpen(true)
   }
 
+  // wallet api returns signed deltas; format for display
   function transactionTypeLabel(type: string) {
     return TRANSACTION_TYPE_LABELS[type] ?? type.replace(/_/g, " ")
   }
@@ -172,6 +180,7 @@ export function PublicHome({
     return "—"
   }
 
+  // posts membership code to member_wallet_lookup.php; shows balance + ledger or inline error
   async function handleWalletLookup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const code = walletCode.trim()
@@ -211,6 +220,7 @@ export function PublicHome({
 
   return (
     <>
+      {/* header + nav: dashboard link when logged in, else staff login */}
       <PageShell
         actions={
           loggedInUser ? (
@@ -235,6 +245,7 @@ export function PublicHome({
         titleClassName="kewl-title mx-auto text-5xl font-black uppercase sm:text-7xl"
       >
 
+      {/* aggregate stats across departments */}
       <section>
         <Card className="bg-main">
           <CardHeader>
@@ -280,6 +291,7 @@ export function PublicHome({
         </Card>
       </section>
 
+      {/* member wallet: lookup form, balance card, transaction history */}
       <section>
         <Card>
           <CardContent className="grid gap-4">
@@ -370,6 +382,7 @@ export function PublicHome({
         </Card>
       </section>
 
+      {/* per-department cards with entry cost and live attendance */}
       <Section
         title="Play Areas"
       >
@@ -430,6 +443,7 @@ export function PublicHome({
         </a>
       </footer>
     </PageShell>
+      {/* staff-only overlay: login or request account (posts to auth_modal.php) */}
       {isLoginOpen ? (
         <div
           aria-labelledby="staff-login-title"

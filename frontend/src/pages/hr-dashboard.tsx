@@ -1,3 +1,4 @@
+// hr dashboard: sick approvals, employee directory + edit modals, weekly hour charts for play-area staff, audit log.
 import { useEffect, useState } from "react"
 import { Pencil } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts"
@@ -23,6 +24,7 @@ import {
   type ChartConfig,
 } from "@/components/ui"
 
+// minimal department row for assignment dropdowns
 type Department = {
   departmentId: number
   name: string
@@ -77,6 +79,7 @@ type SickRequest = {
   reviewNotes: string
 }
 
+// embedded json from hr_dashboard.php bootstrap
 export type HrDashboardProps = {
   currentUser: {
     name: string
@@ -93,6 +96,7 @@ export type HrDashboardProps = {
 const inputClass =
   "h-10 rounded-base border-2 border-border bg-secondary-background px-3 font-sans text-sm font-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 
+// title-case enums and status strings for tables
 function labelize(value: string) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
@@ -101,6 +105,7 @@ function money(value: number) {
   return `$${value.toFixed(2)}`
 }
 
+// shared labeled control used across hr forms
 function Field({
   children,
   label,
@@ -116,6 +121,7 @@ function Field({
   )
 }
 
+// accessible modal wrapper for add/edit/terminate flows
 function ModalShell({
   children,
   onClose,
@@ -149,6 +155,7 @@ function ModalShell({
   )
 }
 
+// department `<select>` shared by add employee + edit employee forms
 function DepartmentSelect({
   departments,
   value,
@@ -170,6 +177,7 @@ function DepartmentSelect({
   )
 }
 
+// series styling for weekly hour bar charts (single hours series per chart)
 const chartConfig: ChartConfig = {
   hours: {
     color: "#ebd22f",
@@ -189,8 +197,10 @@ export function HrDashboard({
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const [terminatingEmployee, setTerminatingEmployee] = useState<Employee | null>(null)
+  // weekly charts only include employees tied to play-area departments (has hour breakdown data)
   const playAreaEmployees = employees.filter((employee) => employee.departmentType === "play_area")
 
+  // hr chrome variables only while mounted
   useEffect(() => {
     document.documentElement.classList.add("ams-hr-theme")
 
@@ -216,6 +226,7 @@ export function HrDashboard({
         roleLabel={`Logged in as ${currentUser.name}`}
         title="HR Dashboard"
       >
+        {/* flash / error from php redirects */}
         {flash ? (
           <Card className="bg-success">
             <CardTitle>{flash}</CardTitle>
@@ -227,6 +238,7 @@ export function HrDashboard({
           </Card>
         ) : null}
 
+        {/* hr approves or denies sick-day requests (posts review_sick_request) */}
         <Section
           description="Approve or deny employee sick-day requests. Approved days add 8 paid hours to the employee's weekly total."
           title="Sick Requests"
@@ -288,6 +300,7 @@ export function HrDashboard({
           </Card>
         </Section>
 
+        {/* full roster; edit opens modal with shift tools */}
         <Section
           actions={<Button onClick={() => setIsAddOpen(true)}>Add New Employee</Button>}
           title="Employees"
@@ -336,6 +349,7 @@ export function HrDashboard({
           </Card>
         </Section>
 
+        {/* bar chart per play-area employee — data scoped to current week from server */}
         <Section
           description="Weekly hours are grouped by employee, with two charts per row on wider screens."
           title="Weekly Shift View"
@@ -374,6 +388,7 @@ export function HrDashboard({
           </div>
         </Section>
 
+        {/* immutable audit trail from hr_action_logs */}
         <Section title="HR Action Log">
           <Card>
             <CardContent>
@@ -408,6 +423,7 @@ export function HrDashboard({
         </Section>
       </DashboardShell>
 
+      {/* create employee — posts add_employee */}
       {isAddOpen ? (
         <ModalShell onClose={() => setIsAddOpen(false)} title="Add New Employee">
           <form action="hr_dashboard.php" className="grid gap-4" method="post">
@@ -429,6 +445,7 @@ export function HrDashboard({
         </ModalShell>
       ) : null}
 
+      {/* edit employee, add shift, recent shifts; terminate opens second modal */}
       {editingEmployee ? (
         <ModalShell onClose={() => setEditingEmployee(null)} title={`Edit ${editingEmployee.name}`}>
           <div className="grid gap-6">
@@ -527,6 +544,7 @@ export function HrDashboard({
         </ModalShell>
       ) : null}
 
+      {/* confirm terminate — posts terminate_employee */}
       {terminatingEmployee ? (
         <ModalShell onClose={() => setTerminatingEmployee(null)} title="Confirm Termination">
           <div className="grid gap-4">

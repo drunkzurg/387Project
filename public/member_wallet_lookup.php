@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+// read-only public api: member wallet balance + ledger rows by membership_code (post only; no passwords)
 require_once __DIR__ . '/../src/Database/Database.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+// shared json exit helper
 $respond = static function (array $payload, int $statusCode = 200): void {
     http_response_code($statusCode);
     echo json_encode($payload, JSON_THROW_ON_ERROR);
@@ -16,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     $respond(['ok' => false, 'message' => 'Unsupported request method.'], 405);
 }
 
+// trim + length guard matches attendees.membership_code column
 $code = trim((string)($_POST['membership_code'] ?? ''));
 if ($code === '') {
     $respond(['ok' => false, 'message' => 'Membership code is required.'], 422);
@@ -30,6 +33,7 @@ try {
     $respond(['ok' => false, 'message' => 'Service temporarily unavailable.'], 503);
 }
 
+// attendee row + optional member_wallet ticket_accounts balance
 $lookup = $pdo->prepare(
     'SELECT
         a.attendee_id,
@@ -55,6 +59,7 @@ $attendeeId = (int)$row['attendee_id'];
 $walletAccountId = $row['wallet_account_id'] !== null ? (int)$row['wallet_account_id'] : null;
 $balance = (int)$row['balance'];
 
+// ledger rows touching this attendee or wallet account (pdo cannot reuse one :wallet placeholder twice)
 if ($walletAccountId !== null) {
     $txStmt = $pdo->prepare(
         'SELECT
@@ -102,6 +107,7 @@ if ($walletAccountId !== null) {
 $rawTransactions = $txStmt->fetchAll(PDO::FETCH_ASSOC);
 $transactions = [];
 
+// compute signed delta relative to the member wallet account for each ledger row
 foreach ($rawTransactions as $trow) {
     $amount = (int)$trow['amount'];
     $src = $trow['source_account_id'] !== null ? (int)$trow['source_account_id'] : null;
@@ -136,6 +142,7 @@ foreach ($rawTransactions as $trow) {
     ];
 }
 
+// shape matches what public-home.tsx expects for the wallet table
 $respond([
     'ok' => true,
     'member' => [
